@@ -38,12 +38,14 @@ h2. Features
     * Mongo GridFS
           o GridFS objects automatically link GridFS chunks to GridFS files
 
-h2. Contact phpMoAdmin
-
-    "www.phpMoAdmin.com":http://www.phpMoAdmin.com
+h2. Screenshots
 
 !http://www.phpmoadmin.com/file/phpmoadmin_cols.jpg!
 
 !http://www.phpmoadmin.com/file/phpmoadmin_docs.jpg!
 
 !http://www.phpmoadmin.com/file/phpmoadmin_dataedit.png!
+
+h2. Contact phpMoAdmin
+
+    "www.phpMoAdmin.com":http://www.phpMoAdmin.com
