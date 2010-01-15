@@ -1,0 +1,41 @@
+= phpMoAdmin
+== MongoDB administration tool for PHP
+=== Built on a stripped-down version of the Vork high-performance framework
+
+  http://www.phpMoAdmin.com
+
+    * *Nothing to configure* - place the moadmin.php file anywhere on your web site and *it just works!*
+    * Fast *AJAX-based XHTML 1.1* interface operates consistently in every browser!
+    * *Self-contained in a single 75kb file!*
+    * Works on any version of PHP5 with the MongoDB NoSQL database installed & running.
+    * Option to enable password-protection for one or more users; to activate protection, just add the username-password(s) to the array at the top of the file.
+    * E_STRICT PHP code is formatted to the Zend Framework coding standards + fully-documented in the phpDocumentor DocBlock standard.
+    * All textareas can be resized by dragging/stretching the lower-right corner.
+    * *Free & open-source!* Release under the GPLv3 FOSS license!
+
+== Features
+
+    * Database
+          o List
+          o Create/drop
+          o Repair
+    * Collection
+          o Show collections
+          o Create/drop collection
+          o List indexes
+          o Create/drop indexes
+                + multiple keys
+                + ascending/descending
+                + unique index
+    * Data objects
+          o Show objects with 3-different viewing options (full, compact & uniform)
+          o Create/delete objects
+          o Edit object data
+    * Mongo GridFS
+          o GridFS objects automatically link GridFS chunks to GridFS files
+
+== Contact phpMoAdmin
+
+  support@phpMoAdmin.com
+
+  http://www.phpMoAdmin.com
