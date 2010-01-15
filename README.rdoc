@@ -8,9 +8,11 @@
     * Fast *AJAX-based XHTML 1.1* interface operates consistently in every browser!
     * *Self-contained in a single 75kb file!*
     * Works on any version of PHP5 with the MongoDB NoSQL database installed & running.
-    * Option to enable password-protection for one or more users; to activate protection, just add the username-password(s) to the array at the top of the file.
-    * E_STRICT PHP code is formatted to the Zend Framework coding standards + fully-documented in the phpDocumentor DocBlock standard.
-    * All textareas can be resized by dragging/stretching the lower-right corner.
+    * Option to enable password-protection for one or more users
+        * to activate protection, just add the username-password(s) to the array at the top of the file.
+    * E_STRICT PHP code is formatted to the Zend Framework coding standards
+        * fully-documented in the phpDocumentor DocBlock standard.
+    * All textareas can be resized by dragging/stretching the lower-right corner
     * *Free & open-source!* Release under the GPLv3 FOSS license!
 
 == Features
