@@ -2,7 +2,7 @@
 == MongoDB administration tool for PHP
 === Built on a stripped-down version of the Vork high-performance framework
 
-  http://www.phpMoAdmin.com
+    www.phpMoAdmin.com[http://www.phpMoAdmin.com]
 
     * *Nothing to configure* - place the moadmin.php file anywhere on your web site and *it just works!*
     * Fast *AJAX-based XHTML 1.1* interface operates consistently in every browser!
@@ -38,6 +38,4 @@
 
 == Contact phpMoAdmin
 
-  support@phpMoAdmin.com
-
-  http://www.phpMoAdmin.com
+    www.phpMoAdmin.com[http://www.phpMoAdmin.com]
