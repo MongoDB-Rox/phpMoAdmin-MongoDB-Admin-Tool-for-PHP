@@ -41,3 +41,9 @@ h2. Features
 h2. Contact phpMoAdmin
 
     "www.phpMoAdmin.com":http://www.phpMoAdmin.com
+
+!http://www.phpmoadmin.com/file/phpmoadmin_cols.jpg!
+
+!http://www.phpmoadmin.com/file/phpmoadmin_docs.jpg!
+
+!http://www.phpmoadmin.com/file/phpmoadmin_dataedit.png!
