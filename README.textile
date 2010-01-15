@@ -40,4 +40,4 @@ h2. Features
 
 h2. Contact phpMoAdmin
 
-    http://www.phpMoAdmin.com
+    "www.phpMoAdmin.com":http://www.phpMoAdmin.com
