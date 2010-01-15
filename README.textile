@@ -1,6 +1,9 @@
 h1. phpMoAdmin
+
 h2. MongoDB administration tool for PHP
+
 h3. Built on a stripped-down version of the Vork high-performance framework
+
     "phpMoAdmin":http://www.phpMoAdmin.com - "MongoDB":http://www.MongoDB.org - "Vork":http://www.Vork.us
 
     * *Nothing to configure* - place the moadmin.php file anywhere on your web site and *it just works!*
