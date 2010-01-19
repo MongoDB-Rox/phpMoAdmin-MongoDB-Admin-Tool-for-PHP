@@ -1510,6 +1510,10 @@ echo $html->div($form->getSelect(array('name' => 'db', 'options' => $mo->mongo['
               . "'); void(0);", 'repair database') . '] [' . $html->link("javascript: mo.dropDatabase('"
               . get::htmlentities($db) . "'); void(0);", 'drop database') . ']');
 echo $form->getFormClose() . $html->jsInline('var mo = {}
+mo.urlEncode = function(str) {
+    return escape(str)'
+        . '.replace(/\+/g, "%2B").replace(/%20/g, "+").replace(/\*/g, "%2A").replace(/\//g, "%2F").replace(/@/g, "%40");
+}
 mo.repairDatabase = function(db) {
     if (confirm("Are you sure that you want to repair and compact the " + db + " database?")) {
         document.location = "' . $baseUrl . '?db=' . $dbUrl . '&action=repairDb";
@@ -1548,14 +1552,16 @@ if (isset($mo->mongo['listCollections'])) {
         echo '<ul>';
         foreach ($mo->mongo['listCollections'] as $coll) {
             $col = substr(strstr($coll, '.'), 1);
-            echo $html->li($html->link($baseUrl . '?db=' . $dbUrl . '&action=listRows&collection=' . $col, $col));
+            echo $html->li($html->link($baseUrl . '?db='
+                                     . $dbUrl . '&action=listRows&collection=' . urlencode($col), $col));
         }
         echo '</ul>';
         echo $html->jsInline('mo.collectionDrop = function(collection) {
    if (confirm("Are you sure that you want to drop " + collection + "?")
        && confirm("All the data in the " + collection + " collection will be lost;'
         . ' are you 100% sure that you want to drop it?\n\nLast chance to cancel!")) {
-        document.location = "' . $baseUrl . '?db=' . $dbUrl . '&action=dropCollection&collection=" + collection;
+        document.location = "' . $baseUrl . '?db='
+                          . $dbUrl . '&action=dropCollection&collection=" + mo.urlEncode(collection);
    }
 }
 $(document).ready(function() {
@@ -1623,7 +1629,7 @@ if (isset($mo->mongo['listRows'])) {
 mo.removeObject = function(_id, idType) {
     if (confirm("Are you sure that you want to delete this " + _id + " object?")) {
         document.location = "' . $baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection)
-                          . '&action=removeObject&_id=" + _id + "&idtype=" + idType;
+                          . '&action=removeObject&_id=" + mo.urlEncode(_id) + "&idtype=" + idType;
     }
 }
 ' . $dbcollnavJs);
