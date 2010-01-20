@@ -6,7 +6,7 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.01
+ * @version 1.0.2
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  */
 
@@ -170,7 +170,7 @@ class moadminModel {
 
     /**
      * Executes a native JS MongoDB command
-     *
+     * This method is not currently used for anything
      * @param string $cmd
      * @return mixed
      */
@@ -191,11 +191,44 @@ class moadminModel {
     }
 
     /**
+     * Total size of all the databases
+     * @var int
+     */
+    public $totalDbSize = 0;
+
+    /**
      * Gets list of databases
      * @return array
      */
     public function listDbs() {
-        return $this->_exec('db.getMongo().getDBNames().sort()');
+        $dbs = $this->_db->admin->command(array('listDatabases' => 1));
+        $this->totalDbSize = $dbs['totalSize'];
+        foreach ($dbs['databases'] as $db) {
+            $return[$db['name']] = $db['name'] . ' (' . (!$db['empty'] ? round($db['sizeOnDisk'] / 1000000) . 'mb' : 'empty') . ')';
+        }
+        return $return;
+    }
+
+    public function getStats() {
+        $return = array_merge($this->_db->admin->command(array('buildinfo' => 1)),
+                              $this->_db->admin->command(array('serverStatus' => 1)));
+        $profile = $this->_db->admin->command(array('profile' => -1));
+        $return['profilingLevel'] = $profile['was'];
+        $return['mongoDbTotalSize'] = round($this->totalDbSize / 1000000) . 'mb';
+        $prevError = $this->_db->admin->command(array('getpreverror' => 1));
+        if (!$prevError['n']) {
+            $return['previousDbErrors'] = 'None';
+        } else {
+            $return['previousDbErrors']['error'] = $prevError['err'];
+            $return['previousDbErrors']['numberOfOperationsAgo'] = $prevError['nPrev'];
+        }
+        $return['globalLock']['totalTime'] .= ' &#0181;Sec';
+        $return['uptime'] = round($return['uptime'] / 60) . ':' . str_pad($return['uptime'] % 60, 2, '0', STR_PAD_LEFT)
+                          . ' minutes';
+        $return['mongoVersion'] = $return['version'];
+        $return['phpMoAdminVersion'] = '1.0.2';
+        unset($return['ok'], $return['version']);
+        return $return;
     }
 
     /**
@@ -403,7 +436,10 @@ class moadminComponent {
         } else if ($action == 'deleteIndex') {
             self::$model->$action($_GET['collection'], unserialize($_GET['index']));
             $action = 'listRows';
-        } else if ($action == 'repairDb') {
+        } else if ($action == 'getStats') {
+            $this->mongo[$action] = self::$model->$action();
+            unset($this->mongo['listCollections']);
+        } else if ($action == 'repairDb' || $action == 'getStats') {
             $this->mongo[$action] = self::$model->$action();
             $action = 'listCollections';
         } else if ($action == 'dropDb') {
@@ -1597,7 +1633,8 @@ if (isset($mo->mongo['listCollections'])) {
     echo $html->div($form->getInput(array('name' => 'collection', 'label' => '', 'addBreak' => false))
        . $form->getInput(array('name' => 'action', 'type' => 'hidden', 'value' => 'createCollection'))
        . $form->getInput(array('type' => 'submit', 'value' => 'Add new collection'))
-       . $form->getInput(array('name' => 'db', 'value' => get::htmlentities($db), 'type' => 'hidden')));
+       . $form->getInput(array('name' => 'db', 'value' => get::htmlentities($db), 'type' => 'hidden'))
+       . ' &nbsp; &nbsp; &nbsp; [' . $html->link($baseUrl . '?action=getStats', 'stats') . ']');
     echo $form->getFormClose();
 
     if (!$mo->mongo['listCollections']) {
@@ -1806,7 +1843,23 @@ mo.removeObject = function(_id, idType) {
     echo $html->jsInline('$("textarea[name=object]").css({"min-width": "750px", "max-width": "1250px", '
         . '"min-height": "250px", "max-height": "2000px", "width": "auto", "height": "auto"}).resizable();
 ' . $dbcollnavJs);
+} else if (isset($mo->mongo['getStats'])) {
+    echo '<ul>';
+    foreach ($mo->mongo['getStats'] as $key => $val) {
+        echo '<li>';
+        if (!is_array($val)) {
+            echo $key . ': ' . $val;
+        } else {
+            echo $key . '<ul>';
+            foreach ($val as $subkey => $subval) {
+                echo $html->li($subkey . ': ' . $subval);
+            }
+            echo '</ul>';
+        }
+        echo '</li>';
+    }
+    echo '</ul>';
 }
-echo '</div>';
+echo '</div>'; //end of bodycontent
 
 echo $html->footer();

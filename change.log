@@ -1,0 +1,10 @@
+Version 1.0.2
+Added stats feature
+Added display of database sizes
+
+Version 1.0.1
+Added support for remote & authenticated connections
+Added exceptions-to-be-thrown when connection to Mongo cannot be established (includes instructions on how to fix issue)
+
+Version 1.0.0
+Initial stable release
