@@ -4,12 +4,20 @@
  *
  * www.phpMoAdmin.com
  * www.Vork.us
+ * www.MongoDB.org
  *
- * @version 1.00
+ * @version 1.01
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  */
 
 //$accessControl = array('scott' => 'tiger'); //to enable password protection, change the username => pass and uncomment
+
+/**
+ * To connect to a remote or authenticated Mongo instance, define the connection string in the MONGO_CONNECTION constant
+ * mongodb://[username:password@]host1[:port1][,host2[:port2:],...]
+ * If you do not know what this means then it is not relevant to your application and you can safely leave it as-is
+ */
+define('MONGO_CONNECTION', '');
 
 /**
  * Vork core-functionality tools
@@ -97,6 +105,28 @@ class get {
 }
 
 /**
+ * Thrown when the mongod server is not accessible
+ */
+class cannotConnectToMongoServer extends Exception {
+    public function __toString() {
+        return '<h1>Cannot connect to the MongoDB database.</h1> ' . PHP_EOL . 'If Mongo is installed then be sure that'
+             . ' an instance of the "mongod" server, not "mongo" shell, is running. <br />' . PHP_EOL
+             . 'Instructions and database download: <a href="http://vork.us/go/fhk4">http://vork.us/go/fhk4</a>';
+    }
+}
+
+/**
+ * Thrown when the mongo extension for PHP is not installed
+ */
+class mongoExtensionNotInstalled extends Exception {
+    public function __toString() {
+        return '<h1>PHP cannot access MongoDB, you need to install the Mongo extension for PHP.</h1> '
+              . PHP_EOL . 'Instructions and driver download: '
+              . '<a href="http://vork.us/go/tv27">http://vork.us/go/tv27</a>';
+    }
+}
+
+/**
  * phpMoAdmin data model
  */
 class moadminModel {
@@ -112,10 +142,29 @@ class moadminModel {
      */
     public $mongo;
 
+    /**
+     * Returns a new Mongo connection
+     * @return Mongo
+     */
+    protected function _mongo() {
+        return (!MONGO_CONNECTION ? new Mongo() : new Mongo(MONGO_CONNECTION));
+    }
+
+    /**
+     * Connects to a Mongo database if the name of one is supplied as an argument
+     * @param string $db
+     */
     public function __construct($db = null) {
         if ($db) {
-            $this->_db = new Mongo();
-            $this->mongo = $this->_db->selectDB($db);
+            if (!extension_loaded('mongo')) {
+                throw new mongoExtensionNotInstalled();
+            }
+            try {
+                $this->_db = $this->_mongo();
+                $this->mongo = $this->_db->selectDB($db);
+            } catch (MongoConnectionException $e) {
+                throw new cannotConnectToMongoServer();
+            }
         }
     }
 
@@ -136,7 +185,7 @@ class moadminModel {
      */
     public function setDb($db) {
         if (!isset($this->_db)) {
-            $this->_db = new Mongo();
+            $this->_db = $this->_mongo();
         }
         $this->mongo = $this->_db->selectDB($db);
     }
@@ -164,7 +213,7 @@ class moadminModel {
         $this->mongo->drop();
         return;
         if (!isset($this->_db)) {
-            $this->_db = new Mongo();
+            $this->_db = $this->_mongo();
         }
         $this->_db->dropDB($this->mongo);
     }
@@ -1388,7 +1437,12 @@ if (!isset($_GET['db'])) {
 } else if (strpos($_GET['db'], '.') !== false) {
     $_GET['db'] = $_GET['newdb'];
 }
-moadminComponent::$model = new moadminModel($_GET['db']);
+try {
+    moadminComponent::$model = new moadminModel($_GET['db']);
+} catch(Exception $e) {
+    echo $e;
+    exit(0);
+}
 $html = new htmlHelper;
 $form = new formHelper;
 $mo = new moadminComponent;
