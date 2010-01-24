@@ -229,6 +229,16 @@ class moadminModel {
         $return['mongoVersion'] = $return['version'];
         $return['phpMoAdminVersion'] = '1.0.2';
         unset($return['ok'], $return['version']);
+        $iniIndex = array(-1 => 'Unlimited', 'Off', 'On');
+        $phpIni = array('allow_persistent', 'auto_reconnect', 'chunk_size', 'cmd', 'default_host', 'default_port',
+                        'max_connections', 'max_persistent');
+        foreach ($phpIni as $ini) {
+            $key = 'php_' . $ini;
+            $return[$key] = ini_get('mongo.' . $ini);
+            if (isset($iniIndex[$return[$key]])) {
+                $return[$key] = $iniIndex[$return[$key]];
+            }
+        }
         return $return;
     }
 
