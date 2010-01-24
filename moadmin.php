@@ -201,7 +201,7 @@ class moadminModel {
      * @return array
      */
     public function listDbs() {
-        $dbs = $this->_db->admin->command(array('listDatabases' => 1));
+        $dbs = $this->_db->selectDB('admin')->command(array('listDatabases' => 1));
         $this->totalDbSize = $dbs['totalSize'];
         foreach ($dbs['databases'] as $db) {
             $return[$db['name']] = $db['name'] . ' (' . (!$db['empty'] ? round($db['sizeOnDisk'] / 1000000) . 'mb' : 'empty') . ')';
@@ -210,12 +210,13 @@ class moadminModel {
     }
 
     public function getStats() {
-        $return = array_merge($this->_db->admin->command(array('buildinfo' => 1)),
-                              $this->_db->admin->command(array('serverStatus' => 1)));
-        $profile = $this->_db->admin->command(array('profile' => -1));
+        $admin = $this->_db->selectDB('admin');
+        $return = array_merge($admin->command(array('buildinfo' => 1)),
+                              $admin->command(array('serverStatus' => 1)));
+        $profile = $admin->command(array('profile' => -1));
         $return['profilingLevel'] = $profile['was'];
         $return['mongoDbTotalSize'] = round($this->totalDbSize / 1000000) . 'mb';
-        $prevError = $this->_db->admin->command(array('getpreverror' => 1));
+        $prevError = $admin->command(array('getpreverror' => 1));
         if (!$prevError['n']) {
             $return['previousDbErrors'] = 'None';
         } else {
