@@ -226,9 +226,12 @@ class moadminModel {
         $return['globalLock']['totalTime'] .= ' &#0181;Sec';
         $return['uptime'] = round($return['uptime'] / 60) . ':' . str_pad($return['uptime'] % 60, 2, '0', STR_PAD_LEFT)
                           . ' minutes';
-        $return['mongoVersion'] = $return['version'];
-        $return['phpMoAdminVersion'] = '1.0.2';
-        unset($return['ok'], $return['version']);
+        $unshift['mongo'] = $return['version'];
+        $unshift['mongoPhpDriver'] = Mongo::VERSION;
+        $unshift['phpMoAdmin'] = '1.0.2';
+        $unshift['gitVersion'] = $return['gitVersion'];
+        unset($return['ok'], $return['version'], $return['gitVersion']);
+        $return = array_merge(array('version' => $unshift), $return);
         $iniIndex = array(-1 => 'Unlimited', 'Off', 'On');
         $phpIni = array('allow_persistent', 'auto_reconnect', 'chunk_size', 'cmd', 'default_host', 'default_port',
                         'max_connections', 'max_persistent');
