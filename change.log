@@ -1,3 +1,10 @@
+Version 1.0.3
+Added sorting of data objects
+Added auto-focus to login box in login form
+Added display of the number of data objects in a collection
+Added row/result-numbers to lists of databases, collections, indexes and collection-data objects.
+Improved stats output
+
 Version 1.0.2
 Added stats feature
 Added display of database sizes

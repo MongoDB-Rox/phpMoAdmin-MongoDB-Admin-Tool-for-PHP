@@ -6,7 +6,7 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.0.2
+ * @version 1.0.3
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  */
 
@@ -24,8 +24,13 @@ define('MONGO_CONNECTION', '');
  */
 class get {
     /**
+     * Opens up public access to config constants and variables and the cache object
+     * @var object
+     */
+    public static $config;
+
+    /**
      * Index of objects loaded, used to maintain uniqueness of singletons
-     *
      * @var array
      */
     public static $loadedObjects = array();
@@ -101,6 +106,45 @@ class get {
             self::initXhtmlentities($quoteStyle, $charset, $doubleEncode);
         }
         return strtr($string, self::$loadedObjects['xhtmlEntities'][$quoteStyle][$charset][$doubleEncode]);
+    }
+
+    /**
+     * Loads an object as a singleton
+     *
+     * @param string $objectType
+     * @param string $objectName
+     * @return object
+     */
+    protected static function _loadObject($objectType, $objectName) {
+        if (isset(self::$loadedObjects[$objectType][$objectName])) {
+            return self::$loadedObjects[$objectType][$objectName];
+        }
+        $objectClassName = $objectName . ucfirst($objectType);
+        if (class_exists($objectClassName)) {
+            $objectObject = new $objectClassName;
+            self::$loadedObjects[$objectType][$objectName] = $objectObject;
+            return $objectObject;
+        } else {
+            $errorMsg = 'Class for ' . $objectType . ' ' . $objectName . ' could not be found';
+        }
+        trigger_error($errorMsg, E_USER_WARNING);
+    }
+
+    /**
+     * Returns a helper object
+     *
+     * @param string $model
+     * @return object
+     */
+    public static function helper($helper) {
+        if (is_array($helper)) {
+            array_walk($helper, array('self', __METHOD__));
+            return;
+        }
+        if (!isset(self::$config['helpers']) || !in_array($helper, self::$config['helpers'])) {
+            self::$config['helpers'][] = $helper;
+        }
+        return self::_loadObject('helper', $helper);
     }
 }
 
@@ -206,6 +250,11 @@ class moadminModel {
         foreach ($dbs['databases'] as $db) {
             $return[$db['name']] = $db['name'] . ' (' . (!$db['empty'] ? round($db['sizeOnDisk'] / 1000000) . 'mb' : 'empty') . ')';
         }
+        ksort($return);
+        $dbCount = 0;
+        foreach ($return as $key => $val) {
+            $return[$key] = ++$dbCount . '. ' . $val;
+        }
         return $return;
     }
 
@@ -228,7 +277,7 @@ class moadminModel {
                           . ' minutes';
         $unshift['mongo'] = $return['version'];
         $unshift['mongoPhpDriver'] = Mongo::VERSION;
-        $unshift['phpMoAdmin'] = '1.0.2';
+        $unshift['phpMoAdmin'] = '1.0.3';
         $unshift['gitVersion'] = $return['gitVersion'];
         unset($return['ok'], $return['version'], $return['gitVersion']);
         $return = array_merge(array('version' => $unshift), $return);
@@ -270,7 +319,13 @@ class moadminModel {
      * @return array
      */
     public function listCollections() {
-        return $this->mongo->listCollections();
+        $collections = array();
+        $MongoCollectionObjects = $this->mongo->listCollections();
+        foreach ($MongoCollectionObjects as $collection) {
+            $collections[] = (string) $collection;
+        }
+        sort($collections);
+        return $collections;
     }
 
     /**
@@ -324,13 +379,22 @@ class moadminModel {
     }
 
     /**
+     * Sort array - currently only used for collections
+     * @var array
+     */
+    public $sort = array('_id' => 1);
+
+    /**
      * Get the records in a collection
      *
      * @param string $collection
      * @return array
      */
     public function listRows($collection) {
-        return $this->mongo->selectCollection($collection)->find()->sort(array('_id' => 1));
+        foreach ($this->sort as $key => $val) { //cast vals to int
+            $sort[$key] = (int) $val;
+        }
+        return $this->mongo->selectCollection($collection)->find()->sort($sort);
     }
 
     /**
@@ -414,9 +478,6 @@ class moadminComponent {
         if (class_exists('mvc')) {
             mvc::$view = '#moadmin';
         }
-        if (!isset(self::$model)) {
-            self::$model = get::model('moadmin');
-        }
         $this->mongo['dbs'] = self::$model->listDbs();
         if (isset($_GET['db'])) {
             if (strpos($_GET['db'], '.') !== false) {
@@ -432,6 +493,10 @@ class moadminComponent {
             $action = 'listRows';
         } else if ($action == 'createCollection') {
             self::$model->$action($_GET['collection']);
+        }
+
+        if (isset($_GET['sort']) && is_array($_GET['sort'])) {
+            self::$model->sort = $_GET['sort'];
         }
 
         $this->mongo['listCollections'] = self::$model->listCollections();
@@ -1241,9 +1306,6 @@ class formHelper {
             }
         }
 
-        if (!class_exists('htmlHelper')) {
-            get::helper('html');
-        }
         if ($args['type'] != 'textarea') {
             $return[] = '<input ' . htmlHelper::formatProperties($properties) . ' />';
         } else {
@@ -1493,9 +1555,29 @@ try {
     echo $e;
     exit(0);
 }
-$html = new htmlHelper;
+$html = get::helper('html');
 $form = new formHelper;
 $mo = new moadminComponent;
+
+class phpMoAdmin {
+    const DRILL_DOWN_DEPTH_LIMIT = 8;
+
+    public static function getArrayKeys(array $array, $path = '', $drillDownDepthCount = 0) {
+        $return = array();
+        if ($drillDownDepthCount) {
+            $path .= '.';
+        }
+        if (++$drillDownDepthCount < self::DRILL_DOWN_DEPTH_LIMIT) {
+            foreach ($array as $key => $val) {
+                $return[$id] = $id = $path . $key;
+                if (is_array($val)) {
+                    $return = array_merge($return, self::getArrayKeys($val, $id, $drillDownDepthCount));
+                }
+            }
+        }
+        return $return;
+    }
+}
 
 /**
  * phpMoAdmin front-end view-element
@@ -1551,9 +1633,6 @@ if (isset($accessControl) && !isset($_SESSION)) {
 }
 echo $html->header($headerArgs);
 echo $html->jsLoad('jquery');
-if (!isset($mo)) {
-    $mo = get::component('moadmin');
-}
 $baseUrl = $_SERVER['SCRIPT_NAME'];
 
 $db = (isset($_GET['db']) ? $_GET['db'] : (isset($_POST['db']) ? $_POST['db'] : get::$config->DB_NAME));
@@ -1591,7 +1670,7 @@ if (isset($accessControl) && !isset($_SESSION['user'])) {
     }
     if (!isset($_SESSION['user'])) {
         echo $form->getFormOpen();
-        echo $html->div($form->getInput(array('name' => 'username')));
+        echo $html->div($form->getInput(array('name' => 'username', 'focus' => true)));
         echo $html->div($form->getInput(array('type' => 'password', 'name' => 'password')));
         echo $html->div($form->getInput(array('type' => 'submit', 'value' => 'Login')));
         echo $form->getFormClose();
@@ -1654,13 +1733,13 @@ if (isset($mo->mongo['listCollections'])) {
     if (!$mo->mongo['listCollections']) {
         echo $html->div('No collections exist');
     } else {
-        echo '<ul>';
+        echo '<ol>';
         foreach ($mo->mongo['listCollections'] as $coll) {
             $col = substr(strstr($coll, '.'), 1);
             echo $html->li($html->link($baseUrl . '?db='
                                      . $dbUrl . '&action=listRows&collection=' . urlencode($col), $col));
         }
-        echo '</ul>';
+        echo '</ol>';
         echo $html->jsInline('mo.collectionDrop = function(collection) {
    if (confirm("Are you sure that you want to drop " + collection + "?")
        && confirm("All the data in the " + collection + " collection will be lost;'
@@ -1685,7 +1764,7 @@ $dbcollnavJs = '$("#dbcollnav").after(\'<a id="dbcollnavlink" href="javascript: 
 if (isset($mo->mongo['listRows'])) {
     echo $html->h1($collection);
     if (isset($mo->mongo['listIndexes'])) {
-        echo '<ul id="indexes" style="display: none; margin-bottom: 10px;">';
+        echo '<ol id="indexes" style="display: none; margin-bottom: 10px;">';
         echo $form->getFormOpen(array('method' => 'get'));
         echo '<div id="indexInput">'
            . $form->getInput(array('name' => 'index[]', 'label' => '', 'addBreak' => false))
@@ -1719,17 +1798,18 @@ if (isset($mo->mongo['listRows'])) {
             }
             echo '<li>' . $index . '</li>';
         }
-        echo '</ul>';
+        echo '</ol>';
     }
+    $objCount = $mo->mongo['listRows']->count();
     echo $html->cssInline('pre {border: 1px solid;}');
     echo $html->jsInline('$(document).ready(function() {
-    $("#mongo_rows").prepend("<div style=\"float: right;\">'
+    $("#mongo_rows").prepend("<div style=\"float: right; line-height: 1.5; margin-top: -45px\">'
     . '[<a href=\"javascript: $(\'#mongo_rows\').find(\'pre\').height(\'100px\').css(\'overflow\', \'auto\');'
     . ' void(0);\" title=\"display compact view of row content\">Compact</a>] '
     . '[<a href=\"javascript: $(\'#mongo_rows\').find(\'pre\').height(\'300px\').css(\'overflow\', \'auto\');'
     . ' void(0);\" title=\"display uniform-view row content\">Uniform</a>] '
     . '[<a href=\"javascript: $(\'#mongo_rows\').find(\'pre\').height(\'auto\').css(\'overflow\', \'hidden\');'
-    . ' void(0);\" title=\"display full row content\">Full</a>]</div>");
+    . ' void(0);\" title=\"display full row content\">Full</a>]<br /><strong>' . $objCount . ' objects</strong></div>");
 });
 mo.removeObject = function(_id, idType) {
     if (confirm("Are you sure that you want to delete this " + _id + " object?")) {
@@ -1740,12 +1820,43 @@ mo.removeObject = function(_id, idType) {
 ' . $dbcollnavJs);
 
     echo '<div id="mongo_rows">';
+
+    if ($objCount > 1) {
+        $sampleObject = phpMoAdmin::getArrayKeys($mo->mongo['listRows']->getNext());
+        if ($objCount > 1) {
+            if ($objCount > 2) {
+                for ($x = 2; $x < $objCount; $x++) {
+                    $mo->mongo['listRows']->next(); //move cursor to second-to-last position
+                }
+            }
+            $sampleObject = array_merge($sampleObject, phpMoAdmin::getArrayKeys($mo->mongo['listRows']->getNext()));
+        }
+        if ($sampleObject) {
+            echo $form->getFormOpen();
+        }
+    }
+
     if (isset($index)) {
         echo '[<a id="indexeslink" href="javascript: $(\'#indexes\').show(); void(0);">Show Indexes</a>] ';
     }
     echo '[' . $html->link($baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection) . '&action=editObject',
-                          'Insert New Object') . ']';
-    echo '<ul>';
+                          'Insert New Object') . '] ';
+    if (isset($sampleObject) && $sampleObject) {
+        $sort = array('name' => 'sort', 'id' => 'sort', 'options' => $sampleObject, 'label' => '', 'addBreak' => false);
+        $sortdir = array('name' => 'sortdir', 'id' => 'sortdir', 'options' => array(1 => 'asc', -1 => 'desc'),
+                         'label' => '', 'addBreak' => false);
+        if (isset($_GET['sort'])) {
+            $sort['value'] = key($_GET['sort']);
+            $sortdir['value'] = current($_GET['sort']);
+        }
+        echo $form->getSelect($sort) . $form->getSelect($sortdir)
+           . $html->link("javascript: document.location='" . $baseUrl . '?db=' . $dbUrl . '&collection='
+           . urlencode($collection) . "&action=listRows&sort[' + document.getElementById('sort').value + ']='"
+                       . " + document.getElementById('sortdir').value; void(0);", 'Sort');
+        echo $form->getFormClose();
+    }
+    echo '<ol style="list-style: none; margin-left: -15px;">';
+    $rowCount = 0;
     $isChunksTable = (substr($collection, -7) == '.chunks');
     if ($isChunksTable) {
         $chunkUrl = $baseUrl . '?db=' . $dbUrl . '&action=listRows&collection=' . urlencode(substr($collection, 0, -7))
@@ -1804,16 +1915,17 @@ mo.removeObject = function(_id, idType) {
                 }
             }
         }
-        echo '<div style="margin-top: 5px; background: #' . ($html->alternator() ? 'ccc78c' : 'edf2ed')
-           . ';" id="' . $row['_id'] . '">'
-           . $html->li('[' . $html->link("javascript: mo.removeObject('" . $idForUrl . "', '" . $idType
+        echo  $html->li('<div style="margin-top: 5px; padding-left: 5px; background: #'
+           . ($html->alternator() ? 'ccc78c' : 'edf2ed') . ';" id="' . $row['_id'] . '">'
+           . '[' . $html->link("javascript: mo.removeObject('" . $idForUrl . "', '" . $idType
            . "'); void(0);", 'X', array('title' => 'Delete')) . '] '
            . ($showEdit ? '[' . $html->link($baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection)
                 . '&action=editObject&_id=' . $idForUrl . '&idtype=' . $idType, 'E', array('title' => 'Edit')) . '] '
-                : ' [<span title="Cannot edit objects containing MongoBinData">N/A</span>] ') . $idString . '</div>'
-           . '<pre>' . implode("\n", $data) . '</pre>');
+                : ' [<span title="Cannot edit objects containing MongoBinData">N/A</span>] ')
+           . $idString . '<div style="float: right; padding: 0px 5px 0px 5px; border: 1px dotted;">' . ++$rowCount
+           . '</div></div><pre style="padding-left: 5px;">' . wordwrap(implode("\n", $data), 205, "\n", true) . '</pre>');
     }
-    echo '</ul>';
+    echo '</ol>';
     if (!isset($idString)) {
         echo '<div class="errormessage">No records in this collection</div>';
     }
@@ -1855,7 +1967,7 @@ mo.removeObject = function(_id, idType) {
 ');
     echo $html->jsLoad('jqueryui');
     echo $html->jsInline('$("textarea[name=object]").css({"min-width": "750px", "max-width": "1250px", '
-        . '"min-height": "250px", "max-height": "2000px", "width": "auto", "height": "auto"}).resizable();
+        . '"min-height": "450px", "max-height": "2000px", "width": "auto", "height": "auto"}).resizable();
 ' . $dbcollnavJs);
 } else if (isset($mo->mongo['getStats'])) {
     echo '<ul>';
