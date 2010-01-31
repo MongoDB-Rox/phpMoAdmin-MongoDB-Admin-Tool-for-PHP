@@ -1,3 +1,7 @@
+Version 1.0.4
+Added design themes and set original design into classic theme
+Replaced all JavaScript confirm() boxes with on-page modal confirms
+
 Version 1.0.3
 Added sorting of data objects
 Added auto-focus to login box in login form

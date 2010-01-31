@@ -6,11 +6,15 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.0.3
+ * @version 1.0.4
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  */
 
-//$accessControl = array('scott' => 'tiger'); //to enable password protection, change the username => pass and uncomment
+/**
+ * To enable password protection, uncomment below and then change the username => password
+ * You can add as many users as needed, eg.: array('scott' => 'tiger', 'samantha' => 'goldfish', 'gene' => 'alpaca')
+ */
+//$accessControl = array('scott' => 'tiger');
 
 /**
  * To connect to a remote or authenticated Mongo instance, define the connection string in the MONGO_CONNECTION constant
@@ -18,6 +22,11 @@
  * If you do not know what this means then it is not relevant to your application and you can safely leave it as-is
  */
 define('MONGO_CONNECTION', '');
+
+/**
+ * Sets the design theme - themes options are: swanky-purse, trontastic and classic
+ */
+define('THEME', 'swanky-purse');
 
 /**
  * Vork core-functionality tools
@@ -277,7 +286,7 @@ class moadminModel {
                           . ' minutes';
         $unshift['mongo'] = $return['version'];
         $unshift['mongoPhpDriver'] = Mongo::VERSION;
-        $unshift['phpMoAdmin'] = '1.0.3';
+        $unshift['phpMoAdmin'] = '1.0.4';
         $unshift['gitVersion'] = $return['gitVersion'];
         unset($return['ok'], $return['version'], $return['gitVersion']);
         $return = array_merge(array('version' => $unshift), $return);
@@ -532,6 +541,8 @@ class moadminComponent {
         }
         if ($action == 'listRows') {
             $this->mongo['listIndexes'] = self::$model->listIndexes($_GET['collection']);
+        } else if ($action == 'dropCollection') {
+            $this->mongo['listCollections'] = self::$model->listCollections();
         }
     }
 }
@@ -573,14 +584,18 @@ class htmlHelper {
     /**
      * Creates simple HTML wrappers, accessed via $this->__call()
      *
-     * jsInlineSingleton makes sure a JavaScript snippet will only be output once, even if echoed out multiple times
-     * and this method will attempt to place the JS code into the head section, if <head> has already been echoed out
-     * then it will return the JS code inline the same as jsInline. Eg.:
+     * JS and CSS files are never included more than once even if requested twice. If DEBUG mode is enabled than the
+     * second request will be added to the debug log as a duplicate. The jsSingleton and cssSingleton methods operate
+     * the same as the js & css methods except that they will silently skip duplicate requests instead of logging them.
+     *
+     * jsInlineSingleton and cssInlineSingleton makes sure a JavaScript or CSS snippet will only be output once, even
+     * if echoed out multiple times and this method will attempt to place the JS code into the head section, if <head>
+     * has already been echoed out then it will return the JS code inline the same as jsInline. Eg.:
      * $helloJs = "function helloWorld() {alert('Hello World');}";
      * echo $html->jsInlineSingleton($helloJs);
      *
-     * Adding an optional extra argument to jsInlineSingleton will return the inline code bare (plus a trailing
-     * linebreak) if it cannot place it into the head section, use for joint JS statements:
+     * Adding an optional extra argument to jsInlineSingleton/cssInlineSingleton will return the inline code bare (plus
+     * a trailing linebreak) if it cannot place it into the head section, this is used for joint JS/CSS statements:
      * echo $html->jsInline($html->jsInlineSingleton($helloJs, true) . 'helloWorld();');
      *
      * @param string $tagType
@@ -605,8 +620,14 @@ class htmlHelper {
                 case 'jsSingleton':
                 case 'css': //Optional extra argument to define CSS media type
                 case 'cssSingleton':
+                case 'jqueryTheme':
+                    if ($tagType == 'jqueryTheme') {
+                        $arg = 'http://ajax.googleapis.com/ajax/libs/jqueryui/1/themes/'
+                             . str_replace(' ', '-', strtolower($arg)) . '/jquery-ui.css';
+                        $tagType = 'css';
+                    }
                     if (!isset($this->_includedFiles[$tagType][$arg])) {
-                        if ($tagType == 'css') {
+                        if ($tagType == 'css' || $tagType == 'cssSingleton') {
                             $return = '<link rel="stylesheet" type="text/css" href="' . $arg . '"'
                                     . ' media="' . (isset($args[1]) ? $args[1] : 'all') . '" />';
                         } else {
@@ -680,7 +701,7 @@ class htmlHelper {
      * @return string
      */
     public function __call($method, $args) {
-        $validTags = array('css', 'js', 'cssSingleton', 'jsSingleton',
+        $validTags = array('css', 'js', 'cssSingleton', 'jsSingleton', 'jqueryTheme',
                            'cssInline', 'jsInline', 'jsInlineSingleton', 'cssInlineSingleton',
                            'div', 'li', 'p', 'h1', 'h2', 'h3', 'h4');
         if (in_array($method, $validTags)) {
@@ -800,7 +821,7 @@ class htmlHelper {
                 $return .= PHP_EOL . '<link rel="icon" href="' . $animatedFavicon . '" type="image/gif" />';
             }
 
-            $containers = array('css', 'cssInline', 'js', 'jsInline');
+            $containers = array('css', 'cssInline', 'js', 'jsInline', 'jqueryTheme');
             foreach ($containers as $container) {
                 if (isset($$container)) {
                     $return .= PHP_EOL . $this->$container($$container);
@@ -1166,13 +1187,17 @@ class formHelper {
             } else if (isset($args['title'])) {
                 $legend = $args['title'];
             }
-
+            if (isset($args['alert'])) {
+                if ($args['alert']) {
+                    $alert = (is_array($args['alert']) ? implode('<br />', $args['alert']) : $args['alert']);
+                }
+                unset($args['alert']);
+            }
             $return = '<form ' . htmlHelper::formatProperties($args) . '><fieldset>';
             if (isset($legend)) {
                 $return .= '<legend>' . $legend . '</legend>';
             }
-            if (isset($args['alert']) && $args['alert']) {
-                $alert = (is_array($args['alert']) ? implode('<br />', $args['alert']) : $args['alert']);
+            if (isset($alert)) {
                 $return .= $this->getErrorMessageContainer((isset($args['id']) ? $args['id'] : 'form'), $alert);
             }
             return $return;
@@ -1324,7 +1349,8 @@ class formHelper {
                 $return[] = ' onkeyup="document.getElementById(\''
                           . $properties['id'] . 'errorwrapper\').innerHTML = (this.value.length > '
                           . $maxlength . ' ? \'Form content exceeds maximum length of '
-                          . $maxlength . ' characters\' : \'\')"';
+                          . $maxlength . ' characters\' : \'Length: \' + this.value.length + \' (maximum: '
+                          . $maxlength . ' characters)\')"';
             }
             $return[] = '>';
             if (isset($value)) {
@@ -1444,8 +1470,11 @@ class formHelper {
         if (!isset($args['addBreak'])) {
             $args['addBreak'] = true;
         }
-        return $this->_getLabel($args, $return)
-             . $this->getErrorMessageContainer($args['id'], (isset($args['error']) ? '<br />' . $args['error'] : ''));
+        $return = $this->_getLabel($args, $return);
+        if (isset($args['error'])) {
+             $return .= $this->getErrorMessageContainer($args['id'], '<br />' . $args['error']);
+        }
+        return $return;
     }
 
     /**
@@ -1512,8 +1541,10 @@ class formHelper {
         } else {
             $return = implode($break, $radios);
         }
-        $errorMsg = (isset($_POST['errors']) && isset($_POST['errors'][$id]) ? $_POST['errors'][$id] : '');
-        return $this->getErrorMessageContainer($id, $errorMsg) . $return;
+        if (isset($_POST['errors']) && isset($_POST['errors'][$id])) {
+            $return = $this->getErrorMessageContainer($id, $_POST['errors'][$id]) . $return;
+        }
+        return $return;
     }
 
     /**
@@ -1583,6 +1614,9 @@ class phpMoAdmin {
  * phpMoAdmin front-end view-element
  */
 $headerArgs['title'] = (isset($_GET['action']) ? 'phpMoAdmin - ' . get::htmlentities($_GET['action']) : 'phpMoAdmin');
+if (THEME != 'classic') {
+    $headerArgs['jqueryTheme'] = (in_array(THEME, array('swanky-purse', 'trontastic')) ? THEME : 'swanky-purse');
+}
 $headerArgs['cssInline'] = '
 /* reset */
 html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address,
@@ -1611,34 +1645,78 @@ legend{color:#000;}
 /* \*/ html, body{height:100%;} /* */
 
 /* initialize */
-html {background: #ccc78c;}
-body {margin: auto; width: 990px; font-family: "Arial"; font-size: small; background: #ffffcc;}
-#bodycontent {padding: 10px; background: #ffffcc;}
+html {background: #74736d;}
+body {margin: auto; width: 990px; font-family: "Arial"; font-size: small; background: #000000; color: #ffffff;}
+#bodycontent {padding: 10px; border: 0px solid;}
 textarea {width: 640px; height: 70px;}
-a, .textLink {text-decoration: none; color: #990000; font-weight: bold;}
-a:hover, .textLink:hover {text-decoration: underline; color: #7987ae;}
+a, .textLink {text-decoration: none; color: #96f226; font-weight: bold;}
+#moadminlogo {color: #96f226; border: 0px solid; padding-left: 10px; font-size: 4px; width: 265px;}
+a:hover, .textLink:hover {text-decoration: underline; color: #9fda58;}
 a:hover pre, h1 a:hover {text-decoration: none;}
 h1, h2, h3, h4 {margin-bottom: 3px;}
 h1, h2 {margin-left: -1px;}
-h1 {font-family: "Arial Black"; font-size: 27px; color: #796f54;}
+h1 {font-family: "Arial Black"; font-size: 27px; color: #b8ec79;}
 h1.midpageh1 {margin-top: 10px;}
 h2 {font-size: large; font-weight: bold; margin-top: 10px; color: #660000;}
 h3 {font-weight: bold; color: #687d1c;}
 h4 {font-weight: bold; color: #10478b;}
 p {margin-bottom: 10px; line-height: 1.75;}
 li {line-height: 1.5; margin-left: 15px;}
-.errormessage {color: #990000; font-weight: bold;}';
+.errormessage {color: #990000; font-weight: bold; background: #ffffff; border: 1px solid #ff0000; padding: 2px;}
+.rownumber {float: right; padding: 0px 5px 0px 5px; border-left: 1px dotted; border-bottom: 1px dotted; color: #ffffff; margin-top: 4px; margin-right: -1px;}
+.ui-widget-header .rownumber {margin-top: 2px; margin-right: 0px;}
+pre {border: 1px solid; margin: 1px; padding-left: 5px;}
+li .ui-widget-content {margin: 1px 1px 3px 1px;}';
+
+switch (THEME) {
+    case 'swanky-purse':
+    $headerArgs['cssInline'] .= 'html {background: #261803;}
+h1, .rownumber {color: #baaa5a;}
+body {background: #4c3a1d url(http://jquery-ui.googlecode.com/svn/tags/1.7.2/themes/swanky-purse/images/ui-bg_diamond_25_675423_10x8.png) 50% 50% repeat;}
+#moadminlogo {color: #baaa5a;}
+li .ui-widget-header {margin: 0px 1px 0px 1px;}
+.ui-widget-header .rownumber {margin-top: 2px; margin-right: -1px;}';
+    break;
+    case 'classic':
+        $headerArgs['cssInline'] .= 'html, .ui-widget-header, button {background: #ccc78c;}
+.ui-widget-content, input.ui-state-hover {background: #edf2ed;}
+h1, .rownumber {color: #796f54;}
+body {background: #ffffcc; color: #000000;}
+#bodycontent {background: #ffffcc;}
+#moadminlogo, button {color: #bb0022;}
+a, .textLink {color: #990000;}
+a:hover, .textLink:hover {color: #7987ae;}
+li .ui-widget-header {margin: 0px 1px 0px 1px;}
+.rownumber {margin-top: 2px; margin-right: 0px;}
+
+.ui-dialog #confirm {padding: 10px;}
+.ui-dialog .ui-icon-closethick, .ui-dialog button {float: right;}
+.ui-resizable { position: relative;}
+.ui-resizable-handle { position: absolute;font-size: 0.1px;z-index: 99999; display: block;}
+.ui-resizable-disabled .ui-resizable-handle, .ui-resizable-autohide .ui-resizable-handle { display: none; }
+.ui-resizable-n { cursor: n-resize; height: 7px; width: 100%; top: -5px; left: 0px; }
+.ui-resizable-s { cursor: s-resize; height: 7px; width: 100%; bottom: -5px; left: 0px; }
+.ui-resizable-e { cursor: e-resize; width: 7px; right: -5px; top: 0px; height: 100%; }
+.ui-resizable-w { cursor: w-resize; width: 7px; left: -5px; top: 0px; height: 100%; }
+.ui-resizable-se { cursor: se-resize; width: 12px; height: 12px; right: 1px; bottom: 1px; }
+.ui-resizable-sw { cursor: sw-resize; width: 9px; height: 9px; left: -5px; bottom: -5px; }
+.ui-resizable-nw { cursor: nw-resize; width: 9px; height: 9px; left: -5px; top: -5px; }
+.ui-resizable-ne { cursor: ne-resize; width: 9px; height: 9px; right: -5px; top: -5px;}';
+        break;
+}
+
 if (isset($accessControl) && !isset($_SESSION)) {
     session_start();
 }
 echo $html->header($headerArgs);
-echo $html->jsLoad('jquery');
+
+echo $html->jsLoad(array('jquery', 'jqueryui'));
 $baseUrl = $_SERVER['SCRIPT_NAME'];
 
 $db = (isset($_GET['db']) ? $_GET['db'] : (isset($_POST['db']) ? $_POST['db'] : get::$config->DB_NAME));
 $dbUrl = urlencode($db);
 
-$phpmoadmin = '<pre style="color: #bb0022; border: 0px solid; padding-left: 10px; font-size: 4px; width: 265px;">
+$phpmoadmin = '<pre id="moadminlogo">
                                 ,ggg, ,ggg,_,ggg,                        ,ggg,
              ,dPYb,            dP""Y8dP""Y88P""Y8b                      dP""8I           8I
              IP\'`Yb            Yb, `88\'  `88\'  `88                     dP   88           8I
@@ -1656,7 +1734,7 @@ PI8 YY88888P88P     `Y8PI8 YY88     88    88    `Y8P"Y8888P"   "Y8P"         `Y8
  I8                     I8
  I8                     I8
 </pre>';
-echo '<div id="bodycontent"><h1 style="float: right;">'
+echo '<div id="bodycontent" class="ui-widget-content"><h1 style="float: right;">'
     . $html->link('http://www.phpmoadmin.com', $phpmoadmin, array('title' => 'phpMoAdmin')) . '</h1>';
 
 if (isset($accessControl) && !isset($_SESSION['user'])) {
@@ -1672,7 +1750,7 @@ if (isset($accessControl) && !isset($_SESSION['user'])) {
         echo $form->getFormOpen();
         echo $html->div($form->getInput(array('name' => 'username', 'focus' => true)));
         echo $html->div($form->getInput(array('type' => 'password', 'name' => 'password')));
-        echo $html->div($form->getInput(array('type' => 'submit', 'value' => 'Login')));
+        echo $html->div($form->getInput(array('type' => 'submit', 'value' => 'Login', 'class' => 'ui-state-hover')));
         echo $form->getFormClose();
         exit(0);
     }
@@ -1687,7 +1765,7 @@ if (isset($mo->mongo['repairDb'])) {
 echo $form->getFormOpen($formArgs);
 echo $html->div($form->getSelect(array('name' => 'db', 'options' => $mo->mongo['dbs'], 'label' => '', 'value' => $db,
                                        'addBreak' => false))
-              . $form->getInput(array('type' => 'submit', 'value' => 'Change database'))
+              . $form->getInput(array('type' => 'submit', 'value' => 'Change database', 'class' => 'ui-state-hover'))
               . ' <span style="font-size: xx-large;">' . get::htmlentities($db)
               . '</span> [' . $html->link("javascript: mo.repairDatabase('" . get::htmlentities($db)
               . "'); void(0);", 'repair database') . '] [' . $html->link("javascript: mo.dropDatabase('"
@@ -1698,22 +1776,37 @@ mo.urlEncode = function(str) {
         . '.replace(/\+/g, "%2B").replace(/%20/g, "+").replace(/\*/g, "%2A").replace(/\//g, "%2F").replace(/@/g, "%40");
 }
 mo.repairDatabase = function(db) {
-    if (confirm("Are you sure that you want to repair and compact the " + db + " database?")) {
-        document.location = "' . $baseUrl . '?db=' . $dbUrl . '&action=repairDb";
-    }
+    mo.confirm("Are you sure that you want to repair and compact the " + db + " database?", function() {
+        window.location.replace("' . $baseUrl . '?db=' . $dbUrl . '&action=repairDb");
+    });
 }
 mo.dropDatabase = function(db) {
-    if (confirm("Are you sure that you want to drop the " + db + " database?")
-       && confirm("All the collections in the " + db + " database will be lost along with all the data within them!'
-    . '\n\nAre you 100% sure that you want to drop this database?'
-    . '\n\nLast chance to cancel!")) {
-        document.location = "' . $baseUrl . '?db=' . $dbUrl . '&action=dropDb";
-    }
+    mo.confirm("Are you sure that you want to drop the " + db + " database?", function() {
+        mo.confirm("All the collections in the " + db + " database will be lost along with all the data within them!'
+                . '\n\nAre you 100% sure that you want to drop this database?'
+                . '\n\nLast chance to cancel!", function() {
+            window.location.replace("' . $baseUrl . '?db=' . $dbUrl . '&action=dropDb");
+        });
+    });
 }
 $("select[name=db]").prepend(\'<option value="new.database">Use new ==&gt;</option>\')'
     . '.after(\'<input type="text" name="newdb" name style="display: none;" />\').change(function() {
     ($(this).val() == "new.database" ? $("input[name=newdb]").show() : $("input[name=newdb]").hide());
-});');
+});
+mo.confirm = function(dialog, func, title) {
+    if (typeof title == "undefined") {
+        title = "Please confirm:";
+    }
+    if (!$("#confirm").length) {
+        $("#dbcollnav").append(\'<div id="confirm" style="display: none;"></div>\');
+    }
+    mo.userFunc = func; //overcomes JS scope issues
+    $("#confirm").html(dialog).attr("title", title).dialog({modal: true, buttons: {
+		"Yes": function() {$(this).dialog("close"); mo.userFunc();},
+		Cancel: function() {$(this).dialog("close");}
+	}}).dialog("open");
+}
+');
 
 if (isset($_GET['collection'])) {
     $collection = get::htmlentities($_GET['collection']);
@@ -1725,7 +1818,7 @@ if (isset($mo->mongo['listCollections'])) {
     echo $form->getFormOpen(array('method' => 'get'));
     echo $html->div($form->getInput(array('name' => 'collection', 'label' => '', 'addBreak' => false))
        . $form->getInput(array('name' => 'action', 'type' => 'hidden', 'value' => 'createCollection'))
-       . $form->getInput(array('type' => 'submit', 'value' => 'Add new collection'))
+       . $form->getInput(array('type' => 'submit', 'value' => 'Add new collection', 'class' => 'ui-state-hover'))
        . $form->getInput(array('name' => 'db', 'value' => get::htmlentities($db), 'type' => 'hidden'))
        . ' &nbsp; &nbsp; &nbsp; [' . $html->link($baseUrl . '?action=getStats', 'stats') . ']');
     echo $form->getFormClose();
@@ -1741,12 +1834,18 @@ if (isset($mo->mongo['listCollections'])) {
         }
         echo '</ol>';
         echo $html->jsInline('mo.collectionDrop = function(collection) {
-   if (confirm("Are you sure that you want to drop " + collection + "?")
-       && confirm("All the data in the " + collection + " collection will be lost;'
-        . ' are you 100% sure that you want to drop it?\n\nLast chance to cancel!")) {
-        document.location = "' . $baseUrl . '?db='
-                          . $dbUrl . '&action=dropCollection&collection=" + mo.urlEncode(collection);
-   }
+    mo.confirm.collection = collection;
+    mo.confirm("Are you sure that you want to drop " + collection + "?",
+        function() {
+            mo.confirm("All the data in the " + mo.confirm.collection + " collection will be lost;'
+                    . ' are you 100% sure that you want to drop it?\n\nLast chance to cancel!",
+                function() {
+                    window.location.replace("' . $baseUrl . '?db=' . $dbUrl
+                                          . '&action=dropCollection&collection=" + mo.urlEncode(mo.confirm.collection));
+                }
+            );
+        }
+    );
 }
 $(document).ready(function() {
     $("#mongo_collections li").each(function() {
@@ -1760,7 +1859,7 @@ $(document).ready(function() {
 }
 echo '</div>'; //end of dbcollnav
 $dbcollnavJs = '$("#dbcollnav").after(\'<a id="dbcollnavlink" href="javascript: $(\\\'#dbcollnav\\\').show();'
-             . ' $(\\\'#dbcollnavlink\\\').hide(); void(0);">Show Database &amp; Collection selection</a>\').hide();';
+             . ' $(\\\'#dbcollnavlink\\\').hide(); void(0);">[Show Database &amp; Collection selection]</a>\').hide();';
 if (isset($mo->mongo['listRows'])) {
     echo $html->h1($collection);
     if (isset($mo->mongo['listIndexes'])) {
@@ -1770,10 +1869,10 @@ if (isset($mo->mongo['listRows'])) {
            . $form->getInput(array('name' => 'index[]', 'label' => '', 'addBreak' => false))
            . $form->getCheckboxes(array('name' => 'isdescending[]', 'options' => array('Descending')))
            . '</div>'
-           . '<a id="addindexcolumn" href="javascript: $(\'#addindexcolumn\')'
-           . '.before(\'<div>\' + $(\'#indexInput\').html() + \'</div>\'); void(0);">Add another field to index</a>'
+           . '<a id="addindexcolumn" style="margin-left: 160px;" href="javascript: $(\'#addindexcolumn\')'
+           . '.before(\'<div>\' + $(\'#indexInput\').html() + \'</div>\'); void(0);">[Add another index field]</a>'
            . $form->getRadios(array('name' => 'unique', 'options' => array('Index', 'Unique'), 'value' => 'Index'))
-           . $form->getInput(array('type' => 'submit', 'value' => 'Add new index'))
+           . $form->getInput(array('type' => 'submit', 'value' => 'Add new index', 'class' => 'ui-state-hover'))
            . $form->getInput(array('name' => 'action', 'type' => 'hidden', 'value' => 'ensureIndex'))
            . $form->getInput(array('name' => 'db', 'value' => get::htmlentities($db), 'type' => 'hidden'))
            . $form->getInput(array('name' => 'collection', 'value' => $collection, 'type' => 'hidden'))
@@ -1793,7 +1892,10 @@ if (isset($mo->mongo['listRows'])) {
                 $index = '[' . $html->link($baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection)
                        . '&action=deleteIndex&index='
                        . serialize($indexArray['key']), 'X', array('title' => 'Drop Index',
-                             'onclick' => "return confirm('Are you sure that you want to drop this index?')")) . '] '
+                             'onclick' => "mo.confirm.href=this.href; "
+                                        . "mo.confirm('Are you sure that you want to drop this index?', "
+                                        . "function() {window.location.replace(mo.confirm.href);}); return false;")
+                         ) . '] '
                        . $index;
             }
             echo '<li>' . $index . '</li>';
@@ -1801,7 +1903,6 @@ if (isset($mo->mongo['listRows'])) {
         echo '</ol>';
     }
     $objCount = $mo->mongo['listRows']->count();
-    echo $html->cssInline('pre {border: 1px solid;}');
     echo $html->jsInline('$(document).ready(function() {
     $("#mongo_rows").prepend("<div style=\"float: right; line-height: 1.5; margin-top: -45px\">'
     . '[<a href=\"javascript: $(\'#mongo_rows\').find(\'pre\').height(\'100px\').css(\'overflow\', \'auto\');'
@@ -1809,13 +1910,14 @@ if (isset($mo->mongo['listRows'])) {
     . '[<a href=\"javascript: $(\'#mongo_rows\').find(\'pre\').height(\'300px\').css(\'overflow\', \'auto\');'
     . ' void(0);\" title=\"display uniform-view row content\">Uniform</a>] '
     . '[<a href=\"javascript: $(\'#mongo_rows\').find(\'pre\').height(\'auto\').css(\'overflow\', \'hidden\');'
-    . ' void(0);\" title=\"display full row content\">Full</a>]<br /><strong>' . $objCount . ' objects</strong></div>");
+    . ' void(0);\" title=\"display full row content\">Full</a>]'
+    . '<div class=\"ui-widget-header\" style=\"padding-left: 5px;\">' . $objCount . ' objects</div></div>");
 });
 mo.removeObject = function(_id, idType) {
-    if (confirm("Are you sure that you want to delete this " + _id + " object?")) {
-        document.location = "' . $baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection)
-                          . '&action=removeObject&_id=" + mo.urlEncode(_id) + "&idtype=" + idType;
-    }
+    mo.confirm("Are you sure that you want to delete this " + _id + " object?", function() {
+        window.location.replace("' . $baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection)
+                              . '&action=removeObject&_id=" + mo.urlEncode(_id) + "&idtype=" + idType);
+    });
 }
 ' . $dbcollnavJs);
 
@@ -1836,11 +1938,11 @@ mo.removeObject = function(_id, idType) {
         }
     }
 
+    echo '[' . $html->link($baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection) . '&action=editObject',
+                          'Insert New Object') . '] ';
     if (isset($index)) {
         echo '[<a id="indexeslink" href="javascript: $(\'#indexes\').show(); void(0);">Show Indexes</a>] ';
     }
-    echo '[' . $html->link($baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection) . '&action=editObject',
-                          'Insert New Object') . '] ';
     if (isset($sampleObject) && $sampleObject) {
         $sort = array('name' => 'sort', 'id' => 'sort', 'options' => $sampleObject, 'label' => '', 'addBreak' => false);
         $sortdir = array('name' => 'sortdir', 'id' => 'sortdir', 'options' => array(1 => 'asc', -1 => 'desc'),
@@ -1849,10 +1951,10 @@ mo.removeObject = function(_id, idType) {
             $sort['value'] = key($_GET['sort']);
             $sortdir['value'] = current($_GET['sort']);
         }
-        echo $form->getSelect($sort) . $form->getSelect($sortdir)
+        echo $form->getSelect($sort) . $form->getSelect($sortdir) . ' '
            . $html->link("javascript: document.location='" . $baseUrl . '?db=' . $dbUrl . '&collection='
            . urlencode($collection) . "&action=listRows&sort[' + document.getElementById('sort').value + ']='"
-                       . " + document.getElementById('sortdir').value; void(0);", 'Sort');
+                       . " + document.getElementById('sortdir').value; void(0);", 'Sort', array('class' => 'ui-state-hover', 'style' => 'padding: 3px 8px 3px 8px;'));
         echo $form->getFormClose();
     }
     echo '<ol style="list-style: none; margin-left: -15px;">';
@@ -1915,15 +2017,15 @@ mo.removeObject = function(_id, idType) {
                 }
             }
         }
-        echo  $html->li('<div style="margin-top: 5px; padding-left: 5px; background: #'
-           . ($html->alternator() ? 'ccc78c' : 'edf2ed') . ';" id="' . $row['_id'] . '">'
+        echo  $html->li('<div style="margin-top: 5px; padding-left: 5px;" class="'
+           . ($html->alternator() ? 'ui-widget-header' : 'ui-widget-content') . '" id="' . $row['_id'] . '">'
            . '[' . $html->link("javascript: mo.removeObject('" . $idForUrl . "', '" . $idType
            . "'); void(0);", 'X', array('title' => 'Delete')) . '] '
            . ($showEdit ? '[' . $html->link($baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection)
                 . '&action=editObject&_id=' . $idForUrl . '&idtype=' . $idType, 'E', array('title' => 'Edit')) . '] '
                 : ' [<span title="Cannot edit objects containing MongoBinData">N/A</span>] ')
-           . $idString . '<div style="float: right; padding: 0px 5px 0px 5px; border: 1px dotted;">' . ++$rowCount
-           . '</div></div><pre style="padding-left: 5px;">' . wordwrap(implode("\n", $data), 205, "\n", true) . '</pre>');
+           . $idString . '<div class="rownumber">' . ++$rowCount . '</div></div><pre>'
+           . wordwrap(implode("\n", $data), 205, "\n", true) . '</pre>');
     }
     echo '</ol>';
     if (!isset($idString)) {
@@ -1936,7 +2038,7 @@ mo.removeObject = function(_id, idType) {
         $_GET['_id'] = unserialize($_GET['_id']);
     }
     echo $html->h1(isset($_GET['_id']) && $_GET['_id'] ? get::htmlentities($_GET['_id']) : '[New Object]');
-    echo $html->div($form->getInput(array('type' => 'submit', 'value' => 'Save Changes')));
+    echo $html->div($form->getInput(array('type' => 'submit', 'value' => 'Save Changes', 'class' => 'ui-state-hover')));
     $textarea = array('name' => 'object', 'label' => '', 'type' => 'textarea');
     $textarea['value'] = ($mo->mongo['editObject'] !== '' ? var_export($mo->mongo['editObject'], true)
                                                           : 'array (' . PHP_EOL . PHP_EOL . ')');
@@ -1951,21 +2053,8 @@ mo.removeObject = function(_id, idType) {
     echo $html->div($form->getInput($textarea)
        . $form->getInput(array('name' => 'action', 'type' => 'hidden', 'value' => 'editObject')));
     echo $html->div($form->getInput(array('name' => 'db', 'value' => get::htmlentities($db), 'type' => 'hidden'))
-       . $form->getInput(array('type' => 'submit', 'value' => 'Save Changes')));
+       . $form->getInput(array('type' => 'submit', 'value' => 'Save Changes', 'class' => 'ui-state-hover')));
     echo $form->getFormClose();
-    echo $html->cssInline('.ui-resizable { position: relative;}
-.ui-resizable-handle { position: absolute;font-size: 0.1px;z-index: 99999; display: block;}
-.ui-resizable-disabled .ui-resizable-handle, .ui-resizable-autohide .ui-resizable-handle { display: none; }
-.ui-resizable-n { cursor: n-resize; height: 7px; width: 100%; top: -5px; left: 0px; }
-.ui-resizable-s { cursor: s-resize; height: 7px; width: 100%; bottom: -5px; left: 0px; }
-.ui-resizable-e { cursor: e-resize; width: 7px; right: -5px; top: 0px; height: 100%; }
-.ui-resizable-w { cursor: w-resize; width: 7px; left: -5px; top: 0px; height: 100%; }
-.ui-resizable-se { cursor: se-resize; width: 12px; height: 12px; right: 1px; bottom: 1px; }
-.ui-resizable-sw { cursor: sw-resize; width: 9px; height: 9px; left: -5px; bottom: -5px; }
-.ui-resizable-nw { cursor: nw-resize; width: 9px; height: 9px; left: -5px; top: -5px; }
-.ui-resizable-ne { cursor: ne-resize; width: 9px; height: 9px; right: -5px; top: -5px;}
-');
-    echo $html->jsLoad('jqueryui');
     echo $html->jsInline('$("textarea[name=object]").css({"min-width": "750px", "max-width": "1250px", '
         . '"min-height": "450px", "max-height": "2000px", "width": "auto", "height": "auto"}).resizable();
 ' . $dbcollnavJs);
