@@ -11,9 +11,9 @@ h3. Built on a stripped-down version of the Vork high-performance framework
     * *Self-contained in a single 90kb file!*
     * Works on any version of PHP5 with the MongoDB NoSQL database & Mongo PHP driver installed and running.
     * Option to enable password-protection for one or more users
-        o to activate protection, just add the username-password(s) to the array at the top of the file.
+        + To activate protection, just add the username-password(s) to the array at the top of the file.
     * E_STRICT PHP code is formatted to the Zend Framework coding standards
-        o fully-documented in the phpDocumentor DocBlock standard.
+        + Fully-documented in the phpDocumentor DocBlock standard.
     * Instructional error messages - *phpMoAdmin can be used as a PHP-Mongo connection debugging tool*
     * All textareas can be resized by dragging/stretching the lower-right corner
     * Multiple design themes to choose from
