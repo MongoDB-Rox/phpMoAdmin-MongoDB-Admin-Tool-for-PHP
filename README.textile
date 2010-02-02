@@ -17,7 +17,23 @@ h3. Built on a stripped-down version of the Vork high-performance framework
     * Instructional error messages - *phpMoAdmin can be used as a PHP-Mongo connection debugging tool*
     * All textareas can be resized by dragging/stretching the lower-right corner
     * Multiple design themes to choose from
-    * *Free & open-source!* Release under the GPLv3 FOSS license!
+    * *Free & open-source!* Released under the GPLv3 FOSS license!
+
+"www.phpMoAdmin.com":http://www.phpMoAdmin.com
+
+h2. Screenshots
+
+h3. Object display (Full-mode)
+!http://www.phpmoadmin.com/file/swankypurse.png?t!:http://www.phpmoadmin.com/screenshot?screenshot=swankypurse
+
+h3. Object display (Compact-mode)
+!http://www.phpmoadmin.com/file/compact.png?t!:http://www.phpmoadmin.com/screenshot?screenshot=compact
+
+h3. Object editor - Drag-corner to resize textarea
+!http://www.phpmoadmin.com/file/editor.png?t!:http://www.phpmoadmin.com/screenshot?screenshot=editor
+
+h3. Mongo Statistics - Stats, error log, versions & system info
+!http://www.phpmoadmin.com/file/stats.png?t!:http://www.phpmoadmin.com/screenshot?screenshot=stats
 
 h2. Features
 
@@ -47,13 +63,19 @@ h2. Features
           o Version of MongoDB, Mongo PHP driver, phpMoAdmin, etc.
     * Optional password-protection for one or more users
 
-h2. Screenshots
+h2. Themes
 
-!http://www.phpmoadmin.com/file/phpmoadmin_cols.jpg!
+!http://www.phpmoadmin.com/file/swankypurse.png?t!:http://www.phpmoadmin.com/screenshot?screenshot=swankypurse
 
-!http://www.phpmoadmin.com/file/phpmoadmin_docs.jpg!
+!http://www.phpmoadmin.com/file/trontastic.png?t!:http://www.phpmoadmin.com/screenshot?screenshot=trontastic
 
-!http://www.phpmoadmin.com/file/phpmoadmin_dataedit.png!
+!http://www.phpmoadmin.com/file/classic.png?t!:http://www.phpmoadmin.com/screenshot?screenshot=classic
+
+!http://www.phpmoadmin.com/file/swankypurse-confirm.png!
+
+!http://www.phpmoadmin.com/file/trontastic-confirm.png!
+
+!http://www.phpmoadmin.com/file/classic-confirm.png!
 
 h2. Contact phpMoAdmin
 
