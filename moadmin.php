@@ -1615,7 +1615,7 @@ class phpMoAdmin {
  */
 $headerArgs['title'] = (isset($_GET['action']) ? 'phpMoAdmin - ' . get::htmlentities($_GET['action']) : 'phpMoAdmin');
 if (THEME != 'classic') {
-    $headerArgs['jqueryTheme'] = (in_array(THEME, array('swanky-purse', 'trontastic')) ? THEME : 'swanky-purse');
+    $headerArgs['jqueryTheme'] = (in_array(THEME, array('swanky-purse', 'trontastic')) ? THEME : 'trontastic');
 }
 $headerArgs['cssInline'] = '
 /* reset */
@@ -1688,9 +1688,12 @@ a, .textLink {color: #990000;}
 a:hover, .textLink:hover {color: #7987ae;}
 li .ui-widget-header {margin: 0px 1px 0px 1px;}
 .rownumber {margin-top: 2px; margin-right: 0px;}
-
+.ui-dialog {border: 3px outset;}
+.ui-dialog .ui-dialog-titlebar {padding: 3px; margin: 1px; border: 3px ridge;}
 .ui-dialog #confirm {padding: 10px;}
-.ui-dialog .ui-icon-closethick, .ui-dialog button {float: right;}
+.ui-dialog .ui-icon-closethick, .ui-dialog button {float: right; margin: 4px;}
+.ui-dialog .ui-icon-closethick {margin-top: -13px;}
+body:first-of-type .ui-dialog .ui-icon-closethick {margin-top: -2px;} /*Chrome/Safari*/
 .ui-resizable { position: relative;}
 .ui-resizable-handle { position: absolute;font-size: 0.1px;z-index: 99999; display: block;}
 .ui-resizable-disabled .ui-resizable-handle, .ui-resizable-autohide .ui-resizable-handle { display: none; }
@@ -1869,8 +1872,10 @@ if (isset($mo->mongo['listRows'])) {
            . $form->getInput(array('name' => 'index[]', 'label' => '', 'addBreak' => false))
            . $form->getCheckboxes(array('name' => 'isdescending[]', 'options' => array('Descending')))
            . '</div>'
-           . '<a id="addindexcolumn" style="margin-left: 160px;" href="javascript: $(\'#addindexcolumn\')'
-           . '.before(\'<div>\' + $(\'#indexInput\').html() + \'</div>\'); void(0);">[Add another index field]</a>'
+           . '<a id="addindexcolumn" style="margin-left: 160px;" href="javascript: '
+           . "$('#addindexcolumn').before('<div>' + $('#indexInput').html().replace(/isdescending_Descending/g, "
+           . "'isdescending_Descending' + mo.indexCount++) + '</div>'); void(0);"
+           . '">[Add another index field]</a>'
            . $form->getRadios(array('name' => 'unique', 'options' => array('Index', 'Unique'), 'value' => 'Index'))
            . $form->getInput(array('type' => 'submit', 'value' => 'Add new index', 'class' => 'ui-state-hover'))
            . $form->getInput(array('name' => 'action', 'type' => 'hidden', 'value' => 'ensureIndex'))
@@ -1903,7 +1908,8 @@ if (isset($mo->mongo['listRows'])) {
         echo '</ol>';
     }
     $objCount = $mo->mongo['listRows']->count();
-    echo $html->jsInline('$(document).ready(function() {
+    echo $html->jsInline('mo.indexCount = 1;
+$(document).ready(function() {
     $("#mongo_rows").prepend("<div style=\"float: right; line-height: 1.5; margin-top: -45px\">'
     . '[<a href=\"javascript: $(\'#mongo_rows\').find(\'pre\').height(\'100px\').css(\'overflow\', \'auto\');'
     . ' void(0);\" title=\"display compact view of row content\">Compact</a>] '
@@ -2025,7 +2031,7 @@ mo.removeObject = function(_id, idType) {
                 . '&action=editObject&_id=' . $idForUrl . '&idtype=' . $idType, 'E', array('title' => 'Edit')) . '] '
                 : ' [<span title="Cannot edit objects containing MongoBinData">N/A</span>] ')
            . $idString . '<div class="rownumber">' . ++$rowCount . '</div></div><pre>'
-           . wordwrap(implode("\n", $data), 205, "\n", true) . '</pre>');
+           . wordwrap(implode("\n", $data), 136, "\n", true) . '</pre>');
     }
     echo '</ol>';
     if (!isset($idString)) {
