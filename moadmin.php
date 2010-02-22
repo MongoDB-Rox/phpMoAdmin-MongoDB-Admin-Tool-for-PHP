@@ -1650,7 +1650,6 @@ body {margin: auto; width: 990px; font-family: "Arial"; font-size: small; backgr
 #bodycontent {padding: 10px; border: 0px solid;}
 textarea {width: 640px; height: 70px;}
 a, .textLink {text-decoration: none; color: #96f226; font-weight: bold;}
-#moadminlogo {color: #96f226; border: 0px solid; padding-left: 10px; font-size: 4px; width: 265px;}
 a:hover, .textLink:hover {text-decoration: underline; color: #9fda58;}
 a:hover pre, h1 a:hover {text-decoration: none;}
 h1, h2, h3, h4 {margin-bottom: 3px;}
@@ -1666,11 +1665,13 @@ li {line-height: 1.5; margin-left: 15px;}
 .rownumber {float: right; padding: 0px 5px 0px 5px; border-left: 1px dotted; border-bottom: 1px dotted; color: #ffffff; margin-top: 4px; margin-right: -1px;}
 .ui-widget-header .rownumber {margin-top: 2px; margin-right: 0px;}
 pre {border: 1px solid; margin: 1px; padding-left: 5px;}
-li .ui-widget-content {margin: 1px 1px 3px 1px;}';
+li .ui-widget-content {margin: 1px 1px 3px 1px;}
+#moadminlogo {color: #96f226; border: 0px solid; padding-left: 10px; font-size: 4px!important; width: 265px;}';
 
 switch (THEME) {
     case 'swanky-purse':
-    $headerArgs['cssInline'] .= 'html {background: #261803;}
+    $headerArgs['cssInline'] .= '
+html {background: #261803;}
 h1, .rownumber {color: #baaa5a;}
 body {background: #4c3a1d url(http://jquery-ui.googlecode.com/svn/tags/1.7.2/themes/swanky-purse/images/ui-bg_diamond_25_675423_10x8.png) 50% 50% repeat;}
 #moadminlogo {color: #baaa5a;}
@@ -1678,7 +1679,8 @@ li .ui-widget-header {margin: 0px 1px 0px 1px;}
 .ui-widget-header .rownumber {margin-top: 2px; margin-right: -1px;}';
     break;
     case 'classic':
-        $headerArgs['cssInline'] .= 'html, .ui-widget-header, button {background: #ccc78c;}
+        $headerArgs['cssInline'] .= '
+html, .ui-widget-header, button {background: #ccc78c;}
 .ui-widget-content, input.ui-state-hover {background: #edf2ed;}
 h1, .rownumber {color: #796f54;}
 body {background: #ffffcc; color: #000000;}
