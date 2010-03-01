@@ -1666,7 +1666,7 @@ li {line-height: 1.5; margin-left: 15px;}
 .ui-widget-header .rownumber {margin-top: 2px; margin-right: 0px;}
 pre {border: 1px solid; margin: 1px; padding-left: 5px;}
 li .ui-widget-content {margin: 1px 1px 3px 1px;}
-#moadminlogo {color: #96f226; border: 0px solid; padding-left: 10px; font-size: 4px!important; width: 265px;}';
+#moadminlogo {color: #96f226; border: 0px solid; padding-left: 10px; font-size: 4px!important; width: 265px; height: 65px; overflow: hidden;}';
 
 switch (THEME) {
     case 'swanky-purse':
