@@ -6,7 +6,7 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.0.4
+ * @version 1.0.5
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  */
 
@@ -286,7 +286,7 @@ class moadminModel {
                           . ' minutes';
         $unshift['mongo'] = $return['version'];
         $unshift['mongoPhpDriver'] = Mongo::VERSION;
-        $unshift['phpMoAdmin'] = '1.0.4';
+        $unshift['phpMoAdmin'] = '1.0.5';
         $unshift['gitVersion'] = $return['gitVersion'];
         unset($return['ok'], $return['version'], $return['gitVersion']);
         $return = array_merge(array('version' => $unshift), $return);
@@ -459,7 +459,7 @@ class moadminModel {
      * @return array
      */
     public function saveObject($collection, $obj) {
-        eval('$obj='.$obj.';'); //cast from string to array
+        eval('$obj=' . $obj . ';'); //cast from string to array
         return $this->mongo->selectCollection($collection)->save($obj);
     }
 }
@@ -1573,26 +1573,22 @@ class formHelper {
 }
 
 /**
- * phpMoAdmin bootstrap
+ * phpMoAdmin specific functionality
  */
-if (!isset($_GET['db'])) {
-    $_GET['db'] = 'admin';
-} else if (strpos($_GET['db'], '.') !== false) {
-    $_GET['db'] = $_GET['newdb'];
-}
-try {
-    moadminComponent::$model = new moadminModel($_GET['db']);
-} catch(Exception $e) {
-    echo $e;
-    exit(0);
-}
-$html = get::helper('html');
-$form = new formHelper;
-$mo = new moadminComponent;
-
 class phpMoAdmin {
+    /**
+     * Sets the depth limit for phpMoAdmin::getArrayKeys (and prevents an endless loop with self-referencing objects)
+     */
     const DRILL_DOWN_DEPTH_LIMIT = 8;
 
+    /**
+     * Retrieves all the keys & subkeys of an array recursively drilling down
+     *
+     * @param array $array
+     * @param string $path
+     * @param int $drillDownDepthCount
+     * @return array
+     */
     public static function getArrayKeys(array $array, $path = '', $drillDownDepthCount = 0) {
         $return = array();
         if ($drillDownDepthCount) {
@@ -1608,7 +1604,40 @@ class phpMoAdmin {
         }
         return $return;
     }
+
+    /**
+     * Strip slashes recursively - used only when magic quotes is enabled (this reverses magic quotes)
+     *
+     * @param mixed $val
+     * @return mixed
+     */
+    public static function stripslashes($val) {
+        return (is_array($val) ? array_map(array('self', 'stripslashes'), $val) : stripslashes($val));
+    }
 }
+
+/**
+ * phpMoAdmin bootstrap
+ */
+if (get_magic_quotes_gpc()) {
+    $_GET = phpMoAdmin::stripslashes($_GET);
+    $_POST = phpMoAdmin::stripslashes($_POST);
+}
+
+if (!isset($_GET['db'])) {
+    $_GET['db'] = 'admin';
+} else if (strpos($_GET['db'], '.') !== false) {
+    $_GET['db'] = $_GET['newdb'];
+}
+try {
+    moadminComponent::$model = new moadminModel($_GET['db']);
+} catch(Exception $e) {
+    echo $e;
+    exit(0);
+}
+$html = get::helper('html');
+$form = new formHelper;
+$mo = new moadminComponent;
 
 /**
  * phpMoAdmin front-end view-element
