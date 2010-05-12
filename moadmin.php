@@ -6,7 +6,7 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.0.5
+ * @version 1.0.6
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  */
 
@@ -27,6 +27,11 @@ define('MONGO_CONNECTION', '');
  * Sets the design theme - themes options are: swanky-purse, trontastic and classic
  */
 define('THEME', 'swanky-purse');
+
+/**
+ * Default limit for number of objects to display per page - set to 0 for no limit
+ */
+define('OBJECT_LIMIT', 100);
 
 /**
  * Vork core-functionality tools
@@ -257,7 +262,8 @@ class moadminModel {
         $dbs = $this->_db->selectDB('admin')->command(array('listDatabases' => 1));
         $this->totalDbSize = $dbs['totalSize'];
         foreach ($dbs['databases'] as $db) {
-            $return[$db['name']] = $db['name'] . ' (' . (!$db['empty'] ? round($db['sizeOnDisk'] / 1000000) . 'mb' : 'empty') . ')';
+            $return[$db['name']] = $db['name'] . ' ('
+                                 . (!$db['empty'] ? round($db['sizeOnDisk'] / 1000000) . 'mb' : 'empty') . ')';
         }
         ksort($return);
         $dbCount = 0;
@@ -267,6 +273,10 @@ class moadminModel {
         return $return;
     }
 
+    /**
+     * Generate system info and stats
+     * @return array
+     */
     public function getStats() {
         $admin = $this->_db->selectDB('admin');
         $return = array_merge($admin->command(array('buildinfo' => 1)),
@@ -286,7 +296,7 @@ class moadminModel {
                           . ' minutes';
         $unshift['mongo'] = $return['version'];
         $unshift['mongoPhpDriver'] = Mongo::VERSION;
-        $unshift['phpMoAdmin'] = '1.0.5';
+        $unshift['phpMoAdmin'] = '1.0.6';
         $unshift['gitVersion'] = $return['gitVersion'];
         unset($return['ok'], $return['version'], $return['gitVersion']);
         $return = array_merge(array('version' => $unshift), $return);
@@ -331,9 +341,10 @@ class moadminModel {
         $collections = array();
         $MongoCollectionObjects = $this->mongo->listCollections();
         foreach ($MongoCollectionObjects as $collection) {
-            $collections[] = (string) $collection;
+            $collection = substr(strstr((string) $collection, '.'), 1);
+            $collections[$collection] = $this->mongo->selectCollection($collection)->count();
         }
-        sort($collections);
+        ksort($collections);
         return $collections;
     }
 
@@ -394,6 +405,18 @@ class moadminModel {
     public $sort = array('_id' => 1);
 
     /**
+     * Number of rows in the entire resultset (before limit-clause is applied)
+     * @var int
+     */
+    public $count;
+
+    /**
+     * Array keys in the first and last object in a collection merged together (used to build sort-by options)
+     * @var array
+     */
+    public $colKeys = array();
+
+    /**
      * Get the records in a collection
      *
      * @param string $collection
@@ -403,7 +426,32 @@ class moadminModel {
         foreach ($this->sort as $key => $val) { //cast vals to int
             $sort[$key] = (int) $val;
         }
-        return $this->mongo->selectCollection($collection)->find()->sort($sort);
+        $col = $this->mongo->selectCollection($collection);
+        $this->count = $col->count();
+        $cur = $col->find()->sort($sort);
+        if ($_SESSION['limit'] && $this->count > $_SESSION['limit']) {
+            if ($this->count > 1) {
+                $this->colKeys = phpMoAdmin::getArrayKeys($col->findOne());
+            }
+            $cur->limit($_SESSION['limit']);
+            if (isset($_GET['skip'])) {
+                if ($this->count <= $_GET['skip']) {
+                    $_GET['skip'] = ($this->count - $_SESSION['limit']);
+                }
+                $cur->skip($_GET['skip']);
+            }
+        } else if ($this->count > 1) {
+            $this->colKeys = phpMoAdmin::getArrayKeys($cur->getNext());
+        }
+        if ($this->count > 1) {
+            $curLast = $col->find()->sort($sort);
+            if ($this->count > 2) {
+                $curLast->skip($this->count - 1);
+            }
+            $this->colKeys = array_merge($this->colKeys, phpMoAdmin::getArrayKeys($curLast->getNext()));
+            ksort($this->colKeys);
+        }
+        return $cur;
     }
 
     /**
@@ -495,6 +543,12 @@ class moadminComponent {
             self::$model->setDb($_GET['db']);
         }
 
+        if (isset($_POST['limit'])) {
+            $_SESSION['limit'] = (int) $_POST['limit'];
+        } else if (!isset($_SESSION['limit'])) {
+            $_SESSION['limit'] = OBJECT_LIMIT;
+        }
+
         $action = (isset($_GET['action']) ? $_GET['action'] : 'listCollections');
         if (isset($_POST['object'])) {
             $obj = self::$model->saveObject($_GET['collection'], $_POST['object']);
@@ -510,7 +564,8 @@ class moadminComponent {
 
         $this->mongo['listCollections'] = self::$model->listCollections();
         if ($action == 'editObject') {
-            $this->mongo[$action] = (isset($_GET['_id']) ? self::$model->$action($_GET['collection'], $_GET['_id'], $_GET['idtype']) : '');
+            $this->mongo[$action] = (isset($_GET['_id'])
+                                     ? self::$model->$action($_GET['collection'], $_GET['_id'], $_GET['idtype']) : '');
             return;
         } else if ($action == 'removeObject') {
             self::$model->$action($_GET['collection'], $_GET['_id'], $_GET['idtype']);
@@ -519,7 +574,8 @@ class moadminComponent {
             foreach ($_GET['index'] as $key => $field) {
                 $indexes[$field] = (isset($_GET['isdescending'][$key]) && $_GET['isdescending'][$key] ? -1 : 1);
             }
-            self::$model->$action($_GET['collection'], $indexes, ($_GET['unique'] == 'Unique' ? array('unique' => true) : array()));
+            self::$model->$action($_GET['collection'], $indexes, ($_GET['unique'] == 'Unique' ? array('unique' => true)
+                                                                                              : array()));
             $action = 'listCollections';
         } else if ($action == 'deleteIndex') {
             self::$model->$action($_GET['collection'], unserialize($_GET['index']));
@@ -538,6 +594,8 @@ class moadminComponent {
 
         if (isset($_GET['collection']) && $action != 'listCollections' && method_exists(self::$model, $action)) {
             $this->mongo[$action] = self::$model->$action($_GET['collection']);
+            $this->mongo['count'] = self::$model->count;
+            $this->mongo['colKeys'] = self::$model->colKeys;
         }
         if ($action == 'listRows') {
             $this->mongo['listIndexes'] = self::$model->listIndexes($_GET['collection']);
@@ -1531,7 +1589,8 @@ class formHelper {
         }
         $this->{$properties['type'] == 'radio' ? 'radios' : 'checkboxes'} = $radios;
         $break = (!isset($args['optionBreak']) ? '<br />' : $args['optionBreak']);
-        $addFieldset = (isset($args['addFieldset']) ? $args['addFieldset'] : ((isset($args['label']) && $args['label']) || count($args['options']) > 1));
+        $addFieldset = (isset($args['addFieldset']) ? $args['addFieldset']
+                        : ((isset($args['label']) && $args['label']) || count($args['options']) > 1));
         if ($addFieldset) {
             $return = '<fieldset id="' . $id . '">';
             if (isset($args['label'])) {
@@ -1619,6 +1678,7 @@ class phpMoAdmin {
 /**
  * phpMoAdmin bootstrap
  */
+session_start();
 if (get_magic_quotes_gpc()) {
     $_GET = phpMoAdmin::stripslashes($_GET);
     $_POST = phpMoAdmin::stripslashes($_POST);
@@ -1691,11 +1751,13 @@ h4 {font-weight: bold; color: #10478b;}
 p {margin-bottom: 10px; line-height: 1.75;}
 li {line-height: 1.5; margin-left: 15px;}
 .errormessage {color: #990000; font-weight: bold; background: #ffffff; border: 1px solid #ff0000; padding: 2px;}
-.rownumber {float: right; padding: 0px 5px 0px 5px; border-left: 1px dotted; border-bottom: 1px dotted; color: #ffffff; margin-top: 4px; margin-right: -1px;}
+.rownumber {float: right; padding: 0px 5px 0px 5px; border-left: 1px dotted; border-bottom: 1px dotted; color: #ffffff;
+            margin-top: 4px; margin-right: -1px;}
 .ui-widget-header .rownumber {margin-top: 2px; margin-right: 0px;}
 pre {border: 1px solid; margin: 1px; padding-left: 5px;}
 li .ui-widget-content {margin: 1px 1px 3px 1px;}
-#moadminlogo {color: #96f226; border: 0px solid; padding-left: 10px; font-size: 4px!important; width: 265px; height: 65px; overflow: hidden;}';
+#moadminlogo {color: #96f226; border: 0px solid; padding-left: 10px; font-size: 4px!important;
+              width: 265px; height: 63px; overflow: hidden;}';
 
 switch (THEME) {
     case 'swanky-purse':
@@ -1737,10 +1799,6 @@ body:first-of-type .ui-dialog .ui-icon-closethick {margin-top: -2px;} /*Chrome/S
 .ui-resizable-nw { cursor: nw-resize; width: 9px; height: 9px; left: -5px; top: -5px; }
 .ui-resizable-ne { cursor: ne-resize; width: 9px; height: 9px; right: -5px; top: -5px;}';
         break;
-}
-
-if (isset($accessControl) && !isset($_SESSION)) {
-    session_start();
 }
 echo $html->header($headerArgs);
 
@@ -1861,10 +1919,10 @@ if (isset($mo->mongo['listCollections'])) {
         echo $html->div('No collections exist');
     } else {
         echo '<ol>';
-        foreach ($mo->mongo['listCollections'] as $coll) {
-            $col = substr(strstr($coll, '.'), 1);
+        foreach ($mo->mongo['listCollections'] as $col => $rowCount) {
             echo $html->li($html->link($baseUrl . '?db='
-                                     . $dbUrl . '&action=listRows&collection=' . urlencode($col), $col));
+                                     . $dbUrl . '&action=listRows&collection=' . urlencode($col), $col)
+                         . ' <span title="' . $rowCount . ' objects">(' . number_format($rowCount) . ')</span>');
         }
         echo '</ol>';
         echo $html->jsInline('mo.collectionDrop = function(collection) {
@@ -1889,6 +1947,15 @@ $(document).ready(function() {
 });
 ');
     }
+    $url = $baseUrl . '?' . http_build_query($_GET);
+    if (isset($collection)) {
+        $url .= '&collection=' . urlencode($collection);
+    }
+    echo $form->getFormOpen(array('action' => $url, 'style' => 'width: 80px; height: 20px;'))
+           . $form->getInput(array('name' => 'limit', 'value' => $_SESSION['limit'], 'label' => '', 'addBreak' => false,
+                                   'style' => 'width: 40px;'))
+           . $form->getInput(array('type' => 'submit', 'value' => 'limit', 'class' => 'ui-state-hover'))
+           . $form->getFormClose();
     echo '</div>';
 }
 echo '</div>'; //end of dbcollnav
@@ -1938,7 +2005,22 @@ if (isset($mo->mongo['listRows'])) {
         }
         echo '</ol>';
     }
-    $objCount = $mo->mongo['listRows']->count();
+    $objCount = $mo->mongo['listRows']->count(); //count of rows returned
+    $paginator = number_format($mo->mongo['count']) . ' objects'; //count of rows in collection
+    if ($mo->mongo['count'] != $objCount) {
+        $skip = (isset($_GET['skip']) ? $_GET['skip'] : 0);
+        $get = $_GET;
+        unset($get['skip']);
+        $url = $baseUrl . '?' . http_build_query($get) . '&collection=' . urlencode($collection) . '&skip=';
+        $paginator = number_format($skip + 1) . '-' . number_format(min($skip + $objCount, $mo->mongo['count']))
+                   . ' of ' . $paginator;
+        if ($skip) { //back
+            $paginator = addslashes($html->link($url . max($skip - $objCount, 0), '&lt;&lt;&lt;')) . ' ' . $paginator;
+        }
+        if ($mo->mongo['count'] > ($objCount + $skip)) { //forward
+            $paginator .= ' ' . addslashes($html->link($url . ($skip + $objCount), '&gt;&gt;&gt;'));
+        }
+    }
     echo $html->jsInline('mo.indexCount = 1;
 $(document).ready(function() {
     $("#mongo_rows").prepend("<div style=\"float: right; line-height: 1.5; margin-top: -45px\">'
@@ -1948,7 +2030,7 @@ $(document).ready(function() {
     . ' void(0);\" title=\"display uniform-view row content\">Uniform</a>] '
     . '[<a href=\"javascript: $(\'#mongo_rows\').find(\'pre\').height(\'auto\').css(\'overflow\', \'hidden\');'
     . ' void(0);\" title=\"display full row content\">Full</a>]'
-    . '<div class=\"ui-widget-header\" style=\"padding-left: 5px;\">' . $objCount . ' objects</div></div>");
+    . '<div class=\"ui-widget-header\" style=\"padding-left: 5px;\">' . $paginator . '</div></div>");
 });
 mo.removeObject = function(_id, idType) {
     mo.confirm("Are you sure that you want to delete this " + _id + " object?", function() {
@@ -1959,29 +2041,17 @@ mo.removeObject = function(_id, idType) {
 ' . $dbcollnavJs);
 
     echo '<div id="mongo_rows">';
-
-    if ($objCount > 1) {
-        $sampleObject = phpMoAdmin::getArrayKeys($mo->mongo['listRows']->getNext());
-        if ($objCount > 1) {
-            if ($objCount > 2) {
-                for ($x = 2; $x < $objCount; $x++) {
-                    $mo->mongo['listRows']->next(); //move cursor to second-to-last position
-                }
-            }
-            $sampleObject = array_merge($sampleObject, phpMoAdmin::getArrayKeys($mo->mongo['listRows']->getNext()));
-        }
-        if ($sampleObject) {
-            echo $form->getFormOpen();
-        }
+    if ($mo->mongo['colKeys']) {
+        echo $form->getFormOpen();
     }
-
     echo '[' . $html->link($baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection) . '&action=editObject',
                           'Insert New Object') . '] ';
     if (isset($index)) {
         echo '[<a id="indexeslink" href="javascript: $(\'#indexes\').show(); void(0);">Show Indexes</a>] ';
     }
-    if (isset($sampleObject) && $sampleObject) {
-        $sort = array('name' => 'sort', 'id' => 'sort', 'options' => $sampleObject, 'label' => '', 'addBreak' => false);
+    if ($mo->mongo['colKeys']) {
+        $sort = array('name' => 'sort', 'id' => 'sort', 'options' => $mo->mongo['colKeys'], 'label' => '',
+                      'addBreak' => false);
         $sortdir = array('name' => 'sortdir', 'id' => 'sortdir', 'options' => array(1 => 'asc', -1 => 'desc'),
                          'label' => '', 'addBreak' => false);
         if (isset($_GET['sort'])) {
@@ -1991,11 +2061,13 @@ mo.removeObject = function(_id, idType) {
         echo $form->getSelect($sort) . $form->getSelect($sortdir) . ' '
            . $html->link("javascript: document.location='" . $baseUrl . '?db=' . $dbUrl . '&collection='
            . urlencode($collection) . "&action=listRows&sort[' + document.getElementById('sort').value + ']='"
-                       . " + document.getElementById('sortdir').value; void(0);", 'Sort', array('class' => 'ui-state-hover', 'style' => 'padding: 3px 8px 3px 8px;'));
+                       . " + document.getElementById('sortdir').value; void(0);", 'Sort',
+                         array('class' => 'ui-state-hover', 'style' => 'padding: 3px 8px 3px 8px;'));
         echo $form->getFormClose();
     }
+
     echo '<ol style="list-style: none; margin-left: -15px;">';
-    $rowCount = 0;
+    $rowCount = (!isset($skip) ? 0 : $skip);
     $isChunksTable = (substr($collection, -7) == '.chunks');
     if ($isChunksTable) {
         $chunkUrl = $baseUrl . '?db=' . $dbUrl . '&action=listRows&collection=' . urlencode(substr($collection, 0, -7))
@@ -2061,7 +2133,7 @@ mo.removeObject = function(_id, idType) {
            . ($showEdit ? '[' . $html->link($baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection)
                 . '&action=editObject&_id=' . $idForUrl . '&idtype=' . $idType, 'E', array('title' => 'Edit')) . '] '
                 : ' [<span title="Cannot edit objects containing MongoBinData">N/A</span>] ')
-           . $idString . '<div class="rownumber">' . ++$rowCount . '</div></div><pre>'
+           . $idString . '<div class="rownumber">' . number_format(++$rowCount) . '</div></div><pre>'
            . wordwrap(implode("\n", $data), 136, "\n", true) . '</pre>');
     }
     echo '</ol>';
