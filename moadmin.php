@@ -446,7 +446,7 @@ class moadminModel {
         if ($this->count > 1) {
             $curLast = $col->find()->sort($sort);
             if ($this->count > 2) {
-                $curLast->skip($this->count - 1);
+                $curLast->skip(min($this->count, 100) - 1);
             }
             $this->colKeys = array_merge($this->colKeys, phpMoAdmin::getArrayKeys($curLast->getNext()));
             ksort($this->colKeys);
@@ -2005,7 +2005,7 @@ if (isset($mo->mongo['listRows'])) {
         }
         echo '</ol>';
     }
-    $objCount = $mo->mongo['listRows']->count(); //count of rows returned
+    $objCount = $mo->mongo['listRows']->count(true); //count of rows returned
     $paginator = number_format($mo->mongo['count']) . ' objects'; //count of rows in collection
     if ($mo->mongo['count'] != $objCount) {
         $skip = (isset($_GET['skip']) ? $_GET['skip'] : 0);
