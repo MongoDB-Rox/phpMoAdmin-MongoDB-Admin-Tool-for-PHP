@@ -2007,7 +2007,7 @@ if (isset($mo->mongo['listRows'])) {
     }
     $objCount = $mo->mongo['listRows']->count(true); //count of rows returned
     $paginator = number_format($mo->mongo['count']) . ' objects'; //count of rows in collection
-    if ($mo->mongo['count'] != $objCount) {
+    if ($objCount && $mo->mongo['count'] != $objCount) {
         $skip = (isset($_GET['skip']) ? $_GET['skip'] : 0);
         $get = $_GET;
         unset($get['skip']);
