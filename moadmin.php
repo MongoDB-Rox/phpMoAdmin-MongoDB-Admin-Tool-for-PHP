@@ -1,4 +1,4 @@
-<?php
+<?php error_reporting(E_ALL | E_STRICT);
 /**
  * phpMoAdmin - built on a stripped-down version of the Vork framework
  *
@@ -6,7 +6,7 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.0.6
+ * @version 1.0.7
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  */
 
@@ -48,6 +48,21 @@ class get {
      * @var array
      */
     public static $loadedObjects = array();
+
+    /**
+     * Gets the current URL
+     *
+     * @param mixed $ssl Boolean (true=https, false=http) or null (auto-selects the current protocol)
+     * @param Boolean $noGet Adds the GET request if true
+     * @return string
+     */
+    public static function url($ssl = null, $noGet = true) {
+        if ($ssl === null) {
+            $ssl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on');
+        }
+        return (!$ssl ? 'http://' : 'https://') . $_SERVER['HTTP_HOST']
+             . $_SERVER[$noGet ? 'SCRIPT_NAME' : 'REQUEST_URI'];
+    }
 
     /**
      * Overloads the php function htmlentities and changes the default charset to UTF-8 and the default value for the
@@ -159,6 +174,21 @@ class get {
             self::$config['helpers'][] = $helper;
         }
         return self::_loadObject('helper', $helper);
+    }
+}
+
+/**
+ * Public interface to load elements and cause redirects
+ */
+class load {
+    /**
+     * Sends a redirects header and disables view rendering
+     * This redirects via a browser command, this is not the same as changing controllers which is handled within MVC
+     *
+     * @param string $url Optional, if undefined this will refresh the page (mostly useful for dumping post values)
+     */
+    public static function redirect($url = null) {
+        header('Location: ' . ($url ? $url : get::url(null, false)));
     }
 }
 
@@ -529,6 +559,14 @@ class moadminComponent {
     public static $model;
 
     /**
+     * Removes the POST/GET params
+     */
+    protected function _dumpFormVals() {
+        load::redirect(get::url() . '?action=listRows&db=' . urlencode($_GET['db'])
+                     . '&collection=' . urlencode($_GET['collection']));
+    }
+
+    /**
      * Routes requests and sets return data
      */
     public function __construct() {
@@ -551,9 +589,12 @@ class moadminComponent {
 
         $action = (isset($_GET['action']) ? $_GET['action'] : 'listCollections');
         if (isset($_POST['object'])) {
-            $obj = self::$model->saveObject($_GET['collection'], $_POST['object']);
-            $_GET['_id'] = $obj['_id'];
-            $action = 'listRows';
+            if (self::$model->saveObject($_GET['collection'], $_POST['object'])) {
+                return $this->_dumpFormVals();
+            } else {
+                $action = 'editObject';
+                $_POST['errors']['object'] = 'Error: object could not be saved - check your array syntax.';
+            }
         } else if ($action == 'createCollection') {
             self::$model->$action($_GET['collection']);
         }
@@ -569,7 +610,7 @@ class moadminComponent {
             return;
         } else if ($action == 'removeObject') {
             self::$model->$action($_GET['collection'], $_GET['_id'], $_GET['idtype']);
-            $action = 'listRows';
+            return $this->_dumpFormVals();
         } else if ($action == 'ensureIndex') {
             foreach ($_GET['index'] as $key => $field) {
                 $indexes[$field] = (isset($_GET['isdescending'][$key]) && $_GET['isdescending'][$key] ? -1 : 1);
@@ -579,7 +620,7 @@ class moadminComponent {
             $action = 'listCollections';
         } else if ($action == 'deleteIndex') {
             self::$model->$action($_GET['collection'], unserialize($_GET['index']));
-            $action = 'listRows';
+            return $this->_dumpFormVals();
         } else if ($action == 'getStats') {
             $this->mongo[$action] = self::$model->$action();
             unset($this->mongo['listCollections']);
@@ -588,7 +629,7 @@ class moadminComponent {
             $action = 'listCollections';
         } else if ($action == 'dropDb') {
             self::$model->$action();
-            header('Location: ' . $_SERVER['SCRIPT_NAME']);
+            load::redirect(get::url());
             return;
         }
 
@@ -600,7 +641,7 @@ class moadminComponent {
         if ($action == 'listRows') {
             $this->mongo['listIndexes'] = self::$model->listIndexes($_GET['collection']);
         } else if ($action == 'dropCollection') {
-            $this->mongo['listCollections'] = self::$model->listCollections();
+            return load::redirect(get::url() . '?db=' . urlencode($_GET['db']));
         }
     }
 }
@@ -2007,7 +2048,7 @@ if (isset($mo->mongo['listRows'])) {
     }
     $objCount = $mo->mongo['listRows']->count(true); //count of rows returned
     $paginator = number_format($mo->mongo['count']) . ' objects'; //count of rows in collection
-    if ($mo->mongo['count'] != $objCount) {
+    if ($objCount && $mo->mongo['count'] != $objCount) {
         $skip = (isset($_GET['skip']) ? $_GET['skip'] : 0);
         $get = $_GET;
         unset($get['skip']);
