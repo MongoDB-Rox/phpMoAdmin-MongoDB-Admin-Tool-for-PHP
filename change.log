@@ -1,3 +1,6 @@
+Version 1.0.7
+Set destructive actions to not repeat upon page-refresh
+
 Version 1.0.6
 Added object-result pagination support with adjustable limit
 Added display of object counts to list of collections
