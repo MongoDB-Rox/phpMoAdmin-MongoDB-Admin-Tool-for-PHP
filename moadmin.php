@@ -8,6 +8,7 @@
  *
  * @version 1.0.7
  * @author Eric David Benari, Chief Architect, phpMoAdmin
+ * @license GPL v3 - http://vork.us/go/mvz5
  */
 
 /**
