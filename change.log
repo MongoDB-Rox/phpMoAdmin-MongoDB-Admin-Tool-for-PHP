@@ -2,6 +2,7 @@ Version 1.0.7
 Added search for exact-text, text with * wildcards, regex or JSON (with Mongo-operators enabled)
 Added query via JSON or PHP-array
 Added rename collection
+Set destructive actions to not repeat upon page-refresh
 Added application bit-depths to stats
 
 Version 1.0.6
