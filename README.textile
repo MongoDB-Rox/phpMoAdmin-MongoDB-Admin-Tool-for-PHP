@@ -8,14 +8,16 @@ h3. Built on a stripped-down version of the Vork high-performance framework
 
     * *Nothing to configure* - place the moadmin.php file anywhere on your web site and *it just works!*
     * Fast *AJAX-driven XHTML 1.1* interface operates consistently in every browser!
-    * *Self-contained in a single 90kb file!*
+    * *Self-contained in a single 95kb file!*
     * Works on any version of PHP5 with the MongoDB NoSQL database & Mongo PHP driver installed and running.
+    * Instructional error messages - *phpMoAdmin can be used as a PHP-Mongo connection debugging tool*
+    * Super flexible - search for exact-text, text with * wildcards, regex or JSON (with Mongo-operators enabled)
     * Option to enable password-protection for one or more users
         + To activate protection, just add the username-password(s) to the array at the top of the file.
     * E_STRICT PHP code is formatted to the Zend Framework coding standards
         + Fully-documented in the phpDocumentor DocBlock standard.
-    * Instructional error messages - *phpMoAdmin can be used as a PHP-Mongo connection debugging tool*
-    * All textareas can be resized by dragging/stretching the lower-right corner
+    * Textareas can be resized by dragging/stretching the lower-right corner
+    * Option to query MongoDB using JSON or a PHP-array syntax
     * Multiple design themes to choose from
     * *Free & open-source!* Released under the GPLv3 FOSS license!
 
@@ -44,13 +46,16 @@ h2. Features
     * Collection
           o Show collections
           o Create/drop collection
+          o Rename collection
           o List indexes
           o Create/drop indexes
                 + multiple keys
                 + ascending/descending
                 + unique index
     * Data objects
+          o Search for exact-text, text with * wildcards, regex or JSON (with Mongo-operators enabled)
           o Show objects with 3-different viewing options (full, compact & uniform)
+          o Option to query MongoDB using JSON or a PHP array
           o Sort by any key within your data object (even nested sub-keys!) with ascending/descending option
           o Create/delete objects
           o Edit object data
@@ -60,7 +65,7 @@ h2. Features
           o Uptime, memory, etc.
           o Log of previous errors
           o Mongo-PHP settings
-          o Version of MongoDB, Mongo PHP driver, phpMoAdmin, etc.
+          o Version & bit-depth of MongoDB, Mongo PHP driver, phpMoAdmin, etc.
     * Optional password-protection for one or more users
 
 h2. Themes

@@ -6,7 +6,7 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.0.6
+ * @version 1.0.7
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  */
 
@@ -195,6 +195,12 @@ class moadminModel {
     protected $_db;
 
     /**
+     * Name of last selected DB
+     * @var string Defaults to admin as that is available in all Mongo instances
+     */
+    protected $_dbName = 'admin';
+
+    /**
      * MongoDB
      * @var MongoDB
      */
@@ -246,6 +252,7 @@ class moadminModel {
             $this->_db = $this->_mongo();
         }
         $this->mongo = $this->_db->selectDB($db);
+        $this->_dbName = $db;
     }
 
     /**
@@ -294,11 +301,12 @@ class moadminModel {
         $return['globalLock']['totalTime'] .= ' &#0181;Sec';
         $return['uptime'] = round($return['uptime'] / 60) . ':' . str_pad($return['uptime'] % 60, 2, '0', STR_PAD_LEFT)
                           . ' minutes';
-        $unshift['mongo'] = $return['version'];
+        $unshift['mongo'] = $return['version'] . ' (' . $return['bits'] . '-bit)';
         $unshift['mongoPhpDriver'] = Mongo::VERSION;
-        $unshift['phpMoAdmin'] = '1.0.6';
+        $unshift['phpMoAdmin'] = '1.0.7';
+        $unshift['php'] = PHP_VERSION . ' (' . (PHP_INT_MAX > 2200000000 ? 64 : 32) . '-bit)';
         $unshift['gitVersion'] = $return['gitVersion'];
-        unset($return['ok'], $return['version'], $return['gitVersion']);
+        unset($return['ok'], $return['version'], $return['gitVersion'], $return['bits']);
         $return = array_merge(array('version' => $unshift), $return);
         $iniIndex = array(-1 => 'Unlimited', 'Off', 'On');
         $phpIni = array('allow_persistent', 'auto_reconnect', 'chunk_size', 'cmd', 'default_host', 'default_port',
@@ -367,6 +375,19 @@ class moadminModel {
     }
 
     /**
+     * Renames a collection
+     *
+     * @param string $from
+     * @param string $to
+     */
+    public function renameCollection($from, $to) {
+        $result = $this->_db->selectDB('admin')->command(array(
+            'renameCollection' => $this->_dbName . '.' . $from,
+            'to' => $this->_dbName . '.' . $to,
+        ));
+    }
+
+    /**
      * Gets a list of the indexes on a collection
      *
      * @param string $collection
@@ -427,9 +448,45 @@ class moadminModel {
             $sort[$key] = (int) $val;
         }
         $col = $this->mongo->selectCollection($collection);
-        $this->count = $col->count();
-        $cur = $col->find()->sort($sort);
-        if ($_SESSION['limit'] && $this->count > $_SESSION['limit']) {
+
+        $find = array();
+        if (isset($_GET['find']) && $_GET['find']) {
+            $_GET['find'] = trim($_GET['find']);
+            if (strpos($_GET['find'], 'array') === 0) {
+                eval('$find = ' . $_GET['find'] . ';');
+            } else if (is_string($_GET['find'])) {
+                if ($findArr = json_decode($_GET['find'], true)) {
+                    $find = $findArr;
+                }
+            }
+        }
+        if (isset($_GET['search']) && $_GET['search']) {
+            switch (substr(trim($_GET['search']), 0, 1)) { //first character
+                case '/': //regex
+                    $find[$_GET['searchField']] = new mongoRegex($_GET['search']);
+                    break;
+                case '{': //JSON
+                    if ($search = json_decode($_GET['search'], true)) {
+                        $find[$_GET['searchField']] = $search;
+                    }
+                    break;
+                default: //text-search
+                    if (strpos($_GET['search'], '*') === false) {
+                        $find[$_GET['searchField']] = $_GET['search'];
+                    } else { //text with wildcards
+                        $regex = '/' . str_replace('\*', '.*', preg_quote($_GET['search'])) . '/i';
+                        $find[$_GET['searchField']] = new mongoRegex($regex);
+                    }
+                    break;
+            }
+        }
+
+        $cols = (!isset($_GET['cols']) ? array() : array_fill_keys($_GET['cols'], true));
+        $cur = $col->find($find, $cols)->sort($sort);
+        $this->count = $cur->count();
+
+        //get keys of first object
+        if ($_SESSION['limit'] && $this->count > $_SESSION['limit']) { //more results than per-page limit
             if ($this->count > 1) {
                 $this->colKeys = phpMoAdmin::getArrayKeys($col->findOne());
             }
@@ -440,9 +497,13 @@ class moadminModel {
                 }
                 $cur->skip($_GET['skip']);
             }
-        } else if ($this->count > 1) {
+        } else if ($this->count) { // results exist but are fewer than per-page limit
             $this->colKeys = phpMoAdmin::getArrayKeys($cur->getNext());
+        } else if ($find && $col->count()) { //query is not returning anything, get cols from first obj in collection
+            $this->colKeys = phpMoAdmin::getArrayKeys($col->findOne());
         }
+
+        //get keys of last or much-later object
         if ($this->count > 1) {
             $curLast = $col->find()->sort($sort);
             if ($this->count > 2) {
@@ -556,10 +617,15 @@ class moadminComponent {
             $action = 'listRows';
         } else if ($action == 'createCollection') {
             self::$model->$action($_GET['collection']);
+        } else if ($action == 'renameCollection'
+                   && isset($_POST['collectionto']) && $_POST['collectionto'] != $_POST['collectionfrom']) {
+            self::$model->$action($_POST['collectionfrom'], $_POST['collectionto']);
+            $_GET['collection'] = $_POST['collectionto'];
+            $action = 'listRows';
         }
 
-        if (isset($_GET['sort']) && is_array($_GET['sort'])) {
-            self::$model->sort = $_GET['sort'];
+        if (isset($_GET['sort'])) {
+            self::$model->sort = array($_GET['sort'] => $_GET['sortdir']);
         }
 
         $this->mongo['listCollections'] = self::$model->listCollections();
@@ -1225,14 +1291,14 @@ class formHelper {
      */
     public function getFormOpen(array $args = array()) {
         if (!$this->_formopen) {
-            if(!isset($args['method'])) {
+            if (!isset($args['method'])) {
                 $args['method'] = 'post';
             }
 
             $this->_formopen = array('id' => (isset($args['id']) ? $args['id'] : true),
                                      'method' => $args['method']);
 
-            if(!isset($args['action'])) {
+            if (!isset($args['action'])) {
                 $args['action'] = $_SERVER['REQUEST_URI'];
             }
 
@@ -1502,7 +1568,7 @@ class formHelper {
                     if (isset($label)) {
                         $return .= ' label="' . get::htmlentities($label) . '"';
                     }
-                    if(in_array($value, $values)) {
+                    if (in_array((string) $value, $values)) {
                         $return .= ' selected="selected"';
                     }
                     $return .= '>' . get::htmlentities($label) . '</option>';
@@ -1518,7 +1584,7 @@ class formHelper {
                     $value = $text;
                 }
                 $return .= '<option value="' . get::htmlentities($value) . '"';
-                if(in_array($value, $values)) {
+                if (in_array((string) $value, $values)) {
                     $return .= ' selected="selected"';
                 }
                 $return .= '>' . get::htmlentities($text) . '</option>';
@@ -1573,7 +1639,7 @@ class formHelper {
             $properties['value'] = $value;
             if (isset($checked) &&
                 ((($properties['type'] == 'radio' || !is_array($checked)) && $value == $checked)
-                  || ($properties['type'] == 'checkbox' && is_array($checked) && in_array($value, $checked)))) {
+                 || ($properties['type'] == 'checkbox' && is_array($checked) && in_array((string) $value, $checked)))) {
                 $properties['checked'] = 'checked';
                 $rowClass = (!isset($properties['class']) ? 'checked' : $properties['class'] . ' checked');
             }
@@ -1756,6 +1822,7 @@ li {line-height: 1.5; margin-left: 15px;}
 .ui-widget-header .rownumber {margin-top: 2px; margin-right: 0px;}
 pre {border: 1px solid; margin: 1px; padding-left: 5px;}
 li .ui-widget-content {margin: 1px 1px 3px 1px;}
+#mongo_rows {padding-top: 10px;}
 #moadminlogo {color: #96f226; border: 0px solid; padding-left: 10px; font-size: 4px!important;
               width: 265px; height: 63px; overflow: hidden;}';
 
@@ -1805,7 +1872,7 @@ echo $html->header($headerArgs);
 echo $html->jsLoad(array('jquery', 'jqueryui'));
 $baseUrl = $_SERVER['SCRIPT_NAME'];
 
-$db = (isset($_GET['db']) ? $_GET['db'] : (isset($_POST['db']) ? $_POST['db'] : get::$config->DB_NAME));
+$db = (isset($_GET['db']) ? $_GET['db'] : (isset($_POST['db']) ? $_POST['db'] : 'admin')); //admin is in every Mongo DB
 $dbUrl = urlencode($db);
 
 $phpmoadmin = '<pre id="moadminlogo">
@@ -1962,7 +2029,15 @@ echo '</div>'; //end of dbcollnav
 $dbcollnavJs = '$("#dbcollnav").after(\'<a id="dbcollnavlink" href="javascript: $(\\\'#dbcollnav\\\').show();'
              . ' $(\\\'#dbcollnavlink\\\').hide(); void(0);">[Show Database &amp; Collection selection]</a>\').hide();';
 if (isset($mo->mongo['listRows'])) {
-    echo $html->h1($collection);
+    echo $form->getFormOpen(array('action' => $baseUrl . '?db=' . $dbUrl . '&action=renameCollection',
+                                  'style' => 'width: 600px; display: none;', 'id' => 'renamecollectionform'))
+       . $form->getInput(array('name' => 'collectionfrom', 'value' => $collection, 'type' => 'hidden'))
+       . $form->getInput(array('name' => 'collectionto', 'value' => $collection, 'label' => '', 'addBreak' => false))
+       . $form->getInput(array('type' => 'submit', 'value' => 'Rename Collection', 'class' => 'ui-state-hover'))
+       . $form->getFormClose();
+    $js = "$('#collectionname').hide(); $('#renamecollectionform').show(); void(0);";
+    echo '<h1 id="collectionname">' . $html->link('javascript: ' . $js, $collection) . '</h1>';
+
     if (isset($mo->mongo['listIndexes'])) {
         echo '<ol id="indexes" style="display: none; margin-bottom: 10px;">';
         echo $form->getFormOpen(array('method' => 'get'));
@@ -2021,6 +2096,14 @@ if (isset($mo->mongo['listRows'])) {
             $paginator .= ' ' . addslashes($html->link($url . ($skip + $objCount), '&gt;&gt;&gt;'));
         }
     }
+
+    $get = $_GET;
+    $get['collection'] = urlencode($collection);
+    $queryGet = $searchGet = $sortGet = $get;
+    unset($sortGet['sort'], $sortGet['sortdir']);
+    unset($searchGet['search'], $searchGet['searchField']);
+    unset($queryGet['find']);
+
     echo $html->jsInline('mo.indexCount = 1;
 $(document).ready(function() {
     $("#mongo_rows").prepend("<div style=\"float: right; line-height: 1.5; margin-top: -45px\">'
@@ -2038,33 +2121,81 @@ mo.removeObject = function(_id, idType) {
                               . '&action=removeObject&_id=" + mo.urlEncode(_id) + "&idtype=" + idType);
     });
 }
-' . $dbcollnavJs);
+' . $dbcollnavJs . "
+mo.submitSort = function() {
+    document.location = '" . $baseUrl . '?' . http_build_query($sortGet) . "&sort='
+                      + $('#sort').val() + '&sortdir=' + $('#sortdir').val();
+}
+mo.submitSearch = function() {
+    document.location = '" . $baseUrl . '?' . http_build_query($searchGet) . "&search='
+                      + $('#search').val() + '&searchField=' + $('#searchField').val();
+}
+mo.submitQuery = function() {
+    document.location = '" . $baseUrl . '?' . http_build_query($queryGet) . "&find=' + $('#find').val();
+}
+");
 
     echo '<div id="mongo_rows">';
-    if ($mo->mongo['colKeys']) {
-        echo $form->getFormOpen();
-    }
+    echo $form->getFormOpen(array('method' => 'get', 'onsubmit' => 'return false;'));
     echo '[' . $html->link($baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection) . '&action=editObject',
                           'Insert New Object') . '] ';
     if (isset($index)) {
-        echo '[<a id="indexeslink" href="javascript: $(\'#indexes\').show(); void(0);">Show Indexes</a>] ';
+        $jsShowIndexes = "javascript: $('#indexeslink').hide(); $('#indexes').show(); void(0);";
+        echo $html->link($jsShowIndexes, '[Show Indexes]', array('id' => 'indexeslink')) . ' ';
     }
+    $linkSubmitArgs = array('class' => 'ui-state-hover', 'style' => 'padding: 3px 8px 3px 8px;');
+    $inlineFormArgs = array('label' => '', 'addBreak' => false);
     if ($mo->mongo['colKeys']) {
+        natcasesort($mo->mongo['colKeys']);
         $sort = array('name' => 'sort', 'id' => 'sort', 'options' => $mo->mongo['colKeys'], 'label' => '',
                       'addBreak' => false);
-        $sortdir = array('name' => 'sortdir', 'id' => 'sortdir', 'options' => array(1 => 'asc', -1 => 'desc'),
-                         'label' => '', 'addBreak' => false);
-        if (isset($_GET['sort'])) {
-            $sort['value'] = key($_GET['sort']);
-            $sortdir['value'] = current($_GET['sort']);
+        $sortdir = array('name' => 'sortdir', 'id' => 'sortdir', 'options' => array(1 => 'asc', -1 => 'desc'));
+        $sortdir = array_merge($sortdir, $inlineFormArgs);
+        $formInputs = $form->getSelect($sort) . $form->getSelect($sortdir) . ' '
+                    . $html->link("javascript: mo.submitSort(); void(0);", 'Sort', $linkSubmitArgs);
+        if (!isset($_GET['sort']) || !$_GET['sort']) {
+            $jsLink = "javascript: $('#sortlink').hide(); $('#sortform').show(); void(0);";
+            $formInputs = $html->link($jsLink, '[sort]', array('id' => 'sortlink')) . ' '
+                        . '<div id="sortform" style="display: none;">' . $formInputs . '</div>';
+        } else {
+            $formInputs = $html->div($formInputs);
         }
-        echo $form->getSelect($sort) . $form->getSelect($sortdir) . ' '
-           . $html->link("javascript: document.location='" . $baseUrl . '?db=' . $dbUrl . '&collection='
-           . urlencode($collection) . "&action=listRows&sort[' + document.getElementById('sort').value + ']='"
-                       . " + document.getElementById('sortdir').value; void(0);", 'Sort',
-                         array('class' => 'ui-state-hover', 'style' => 'padding: 3px 8px 3px 8px;'));
-        echo $form->getFormClose();
+        echo $formInputs;
+
+        $search = array('name' => 'search', 'id' => 'search', 'style' => 'width: 300px;');
+        $search = array_merge($search, $inlineFormArgs);
+        $searchField = array('name' => 'searchField', 'id' => 'searchField', 'options' => $mo->mongo['colKeys']);
+        $searchField = array_merge($searchField, $inlineFormArgs);
+
+        $linkSubmitArgs['title'] = 'Search may be a exact-text, text with * wildcards, regex '
+                                 . 'or JSON (with Mongo-operators)';
+        $formInputs = $form->getSelect($searchField) . $form->getInput($search) . ' '
+                    . $html->link("javascript: mo.submitSearch(); void(0);", 'Search', $linkSubmitArgs);
+        if (!isset($_GET['search']) || !$_GET['search']) {
+            $jsLink = "javascript: $('#searchlink').hide(); $('#searchform').show(); void(0);";
+            $formInputs = $html->link($jsLink, '[search]', array('id' => 'searchlink')) . ' '
+                        . '<div id="searchform" style="display: none;">' . $formInputs . '</div>';
+        } else {
+            $formInputs = $html->div($formInputs);
+        }
+        echo $formInputs;
     }
+
+    $linkSubmitArgs['title'] = 'Query may be a JSON object or a PHP array';
+    $query = array('name' => 'find', 'id' => 'find', 'type' => 'textarea', 'style' => 'width: 600px;');
+    $query = array_merge($query, $inlineFormArgs);
+    $formInputs = $form->getInput($query) . ' '
+                . $html->link("javascript: mo.submitQuery(); void(0);", 'Query', $linkSubmitArgs);
+    if (!isset($_GET['find']) || !$_GET['find']) {
+        $jsLink = "javascript: $('#querylink').hide(); $('#queryform').show(); void(0);";
+        $formInputs = $html->link($jsLink, '[query]', array('id' => 'querylink')) . ' '
+                    . '<div id="queryform" style="display: none;">' . $formInputs . '</div>';
+    } else {
+        $formInputs = $html->div($formInputs);
+    }
+    echo $formInputs;
+
+    echo $form->getFormClose();
 
     echo '<ol style="list-style: none; margin-left: -15px;">';
     $rowCount = (!isset($skip) ? 0 : $skip);

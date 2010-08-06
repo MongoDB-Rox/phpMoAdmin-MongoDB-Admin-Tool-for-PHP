@@ -1,3 +1,9 @@
+Version 1.0.7
+Added search for exact-text, text with * wildcards, regex or JSON (with Mongo-operators enabled)
+Added query via JSON or PHP-array
+Added rename collection
+Added application bit-depths to stats
+
 Version 1.0.6
 Added object-result pagination support with adjustable limit
 Added display of object counts to list of collections
