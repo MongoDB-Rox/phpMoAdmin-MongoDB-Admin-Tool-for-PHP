@@ -11,7 +11,12 @@ h3. Built on a stripped-down version of the Vork high-performance framework
     * *Self-contained in a single 95kb file!*
     * Works on any version of PHP5 with the MongoDB NoSQL database & Mongo PHP driver installed and running.
     * Instructional error messages - *phpMoAdmin can be used as a PHP-Mongo connection debugging tool*
-    * Super flexible - search for exact-text, text with * wildcards, regex or JSON (with Mongo-operators enabled)
+    * Super flexible - search for:
+        + exact-text
+        + (type-casted) value
+        + text with * wildcards
+        + Regular Expressions (regex)
+        + JSON (with Mongo-operators enabled)
     * Option to enable password-protection for one or more users
         + To activate protection, just add the username-password(s) to the array at the top of the file.
     * E_STRICT PHP code is formatted to the Zend Framework coding standards
@@ -53,10 +58,11 @@ h2. Features
                 + ascending/descending
                 + unique index
     * Data objects
-          o Search for exact-text, text with * wildcards, regex or JSON (with Mongo-operators enabled)
+          o Search for exact-text, (type-casted) value, text with * wildcards, regex or JSON (with Mongo-operators enabled)
           o Show objects with 3-different viewing options (full, compact & uniform)
           o Option to query MongoDB using JSON or a PHP array
           o Sort by any key within your data object (even nested sub-keys!) with ascending/descending option
+                + Option to sort by $natural for rapid browsing of large datasets
           o Create/delete objects
           o Edit object data
     * Mongo GridFS
@@ -85,3 +91,5 @@ h2. Themes
 h2. Contact phpMoAdmin
 
     "www.phpMoAdmin.com":http://www.phpMoAdmin.com
+
+!http://www.phpmoadmin.com/file/phpMoAdmin-MongoDB-Admin-GUI.jpg!

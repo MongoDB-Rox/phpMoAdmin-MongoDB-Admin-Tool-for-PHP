@@ -6,7 +6,7 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.0.7
+ * @version 1.0.8
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  * @license GPL v3 - http://vork.us/go/mvz5
  */
@@ -334,7 +334,7 @@ class moadminModel {
                           . ' minutes';
         $unshift['mongo'] = $return['version'] . ' (' . $return['bits'] . '-bit)';
         $unshift['mongoPhpDriver'] = Mongo::VERSION;
-        $unshift['phpMoAdmin'] = '1.0.7';
+        $unshift['phpMoAdmin'] = '1.0.8';
         $unshift['php'] = PHP_VERSION . ' (' . (PHP_INT_MAX > 2200000000 ? 64 : 32) . '-bit)';
         $unshift['gitVersion'] = $return['gitVersion'];
         unset($return['ok'], $return['version'], $return['gitVersion'], $return['bits']);
@@ -501,9 +501,27 @@ class moadminModel {
                         $find[$_GET['searchField']] = $search;
                     }
                     break;
+                case '(':
+                    $types = array('bool', 'boolean', 'int', 'integer', 'float', 'double', 'string', 'array', 'object',
+                                   'null');
+                    $closeParentheses = strpos($_GET['search'], ')');
+                    if ($closeParentheses) {
+                        $cast = substr($_GET['search'], 1, ($closeParentheses - 1));
+                        if (in_array($cast, $types)) {
+                            $search = trim(substr($_GET['search'], ($closeParentheses + 1)));
+                            settype($search, $cast);
+                            $find[$_GET['searchField']] = $search;
+                            break;
+                        }
+                    } //else no-break
                 default: //text-search
                     if (strpos($_GET['search'], '*') === false) {
-                        $find[$_GET['searchField']] = $_GET['search'];
+                        if (!is_numeric($_GET['search'])) {
+                            $find[$_GET['searchField']] = $_GET['search'];
+                        } else { //$_GET is always a string-type
+                            $in = array((string) $_GET['search'], (int) $_GET['search'], (float) $_GET['search']);
+                            $find[$_GET['searchField']] = array('$in' => $in);
+                        }
                     } else { //text with wildcards
                         $regex = '/' . str_replace('\*', '.*', preg_quote($_GET['search'])) . '/i';
                         $find[$_GET['searchField']] = new mongoRegex($regex);
@@ -1597,8 +1615,11 @@ class formHelper {
                 if (!$useValues) {
                     $value = $text;
                 }
-                $return .= '<option value="' . get::htmlentities($value) . '">'
-                         . get::htmlentities($text) . '</option>';
+                $return .= '<option value="' . get::htmlentities($value) . '"';
+                if (in_array((string) $value, $values)) {
+                    $return .= ' selected="selected"';
+                }
+                $return .= '>' . get::htmlentities($text) . '</option>';
             }
         }
 
@@ -2178,7 +2199,7 @@ mo.submitQuery = function() {
 ");
 
     echo '<div id="mongo_rows">';
-    echo $form->getFormOpen(array('method' => 'get', 'onsubmit' => 'return false;'));
+    echo $form->getFormOpen(array('method' => 'get', 'onsubmit' => 'mo.submitSearch(); return false;'));
     echo '[' . $html->link($baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection) . '&action=editObject',
                           'Insert New Object') . '] ';
     if (isset($index)) {
@@ -2188,9 +2209,11 @@ mo.submitQuery = function() {
     $linkSubmitArgs = array('class' => 'ui-state-hover', 'style' => 'padding: 3px 8px 3px 8px;');
     $inlineFormArgs = array('label' => '', 'addBreak' => false);
     if ($mo->mongo['colKeys']) {
-        natcasesort($mo->mongo['colKeys']);
-        $sort = array('name' => 'sort', 'id' => 'sort', 'options' => $mo->mongo['colKeys'], 'label' => '',
-                      'addBreak' => false);
+        $colKeys = $mo->mongo['colKeys'];
+        unset($colKeys['_id']);
+        natcasesort($colKeys);
+        $sort = array('name' => 'sort', 'id' => 'sort', 'options' => $colKeys, 'label' => '',
+                      'leadingOptions' => array('_id' => '_id', '$natural' => '$natural'), 'addBreak' => false);
         $sortdir = array('name' => 'sortdir', 'id' => 'sortdir', 'options' => array(1 => 'asc', -1 => 'desc'));
         $sortdir = array_merge($sortdir, $inlineFormArgs);
         $formInputs = $form->getSelect($sort) . $form->getSelect($sortdir) . ' '
@@ -2206,11 +2229,12 @@ mo.submitQuery = function() {
 
         $search = array('name' => 'search', 'id' => 'search', 'style' => 'width: 300px;');
         $search = array_merge($search, $inlineFormArgs);
-        $searchField = array('name' => 'searchField', 'id' => 'searchField', 'options' => $mo->mongo['colKeys']);
+        $searchField = array('name' => 'searchField', 'id' => 'searchField', 'options' => $colKeys,
+                             'leadingOptions' => array('_id' => '_id'));
         $searchField = array_merge($searchField, $inlineFormArgs);
 
-        $linkSubmitArgs['title'] = 'Search may be a exact-text, text with * wildcards, regex '
-                                 . 'or JSON (with Mongo-operators)';
+        $linkSubmitArgs['title'] = 'Search may be a exact-text, (type-casted) value, text with * wildcards, regex '
+                                 . 'or JSON (with Mongo-operators enabled)';
         $formInputs = $form->getSelect($searchField) . $form->getInput($search) . ' '
                     . $html->link("javascript: mo.submitSearch(); void(0);", 'Search', $linkSubmitArgs);
         if (!isset($_GET['search']) || !$_GET['search']) {
