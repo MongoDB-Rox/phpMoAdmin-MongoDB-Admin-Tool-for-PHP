@@ -503,13 +503,17 @@ class moadminModel {
                     break;
                 case '(':
                     $types = array('bool', 'boolean', 'int', 'integer', 'float', 'double', 'string', 'array', 'object',
-                                   'null');
+                                   'null', 'mongoid');
                     $closeParentheses = strpos($_GET['search'], ')');
                     if ($closeParentheses) {
-                        $cast = substr($_GET['search'], 1, ($closeParentheses - 1));
+                        $cast = strtolower(substr($_GET['search'], 1, ($closeParentheses - 1)));
                         if (in_array($cast, $types)) {
                             $search = trim(substr($_GET['search'], ($closeParentheses + 1)));
-                            settype($search, $cast);
+                            if ($cast == 'mongoid') {
+                                $search = new MongoID($search);
+                            } else {
+                                settype($search, $cast);
+                            }
                             $find[$_GET['searchField']] = $search;
                             break;
                         }
@@ -2233,8 +2237,8 @@ mo.submitQuery = function() {
                              'leadingOptions' => array('_id' => '_id'));
         $searchField = array_merge($searchField, $inlineFormArgs);
 
-        $linkSubmitArgs['title'] = 'Search may be a exact-text, (type-casted) value, text with * wildcards, regex '
-                                 . 'or JSON (with Mongo-operators enabled)';
+        $linkSubmitArgs['title'] = 'Search may be a exact-text, (type-casted) value, (mongoid) 4c6...80c,'
+                                 . ' text with * wildcards, regex or JSON (with Mongo-operators enabled)';
         $formInputs = $form->getSelect($searchField) . $form->getInput($search) . ' '
                     . $html->link("javascript: mo.submitSearch(); void(0);", 'Search', $linkSubmitArgs);
         if (!isset($_GET['search']) || !$_GET['search']) {
