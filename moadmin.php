@@ -576,7 +576,7 @@ class moadminModel {
      * @return mixed
      */
     protected function _unserialize($_id, $idtype) {
-        if ($idtype == 'object') {
+        if ($idtype == 'object' || $idtype == 'array') {
             $errLevel = error_reporting();
             error_reporting(0); //unserializing an object that is not serialized throws a warning
             $_idObj = unserialize($_id);
@@ -2280,15 +2280,13 @@ mo.submitQuery = function() {
         if (is_object($idString)) {
             $idString = '(' . get_class($idString) . ') ' . $idString;
             $idForUrl = serialize($id);
+        } else if (is_array($idString)) {
+            $idString = '(array) ' . json_encode($idString);
+            $idForUrl = serialize($id);
         } else {
             $idForUrl = urlencode($id);
         }
         $idType = gettype($row['_id']);
-        $idDepth = 0; //protection against endless looping
-        while (is_array($id) && ++$idDepth < 10) {
-            $id = current($id);
-            $idString .= '->' . $id;
-        }
         if ($isChunksTable && isset($row['data']) && is_object($row['data'])
             && get_class($row['data']) == 'MongoBinData') {
             $showEdit = false;
@@ -2344,8 +2342,11 @@ mo.submitQuery = function() {
     echo '</div>';
 } else if (isset($mo->mongo['editObject'])) {
     echo $form->getFormOpen(array('action' => $baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection)));
-    if (isset($_GET['_id']) && $_GET['_id'] && $_GET['idtype'] == 'object') {
+    if (isset($_GET['_id']) && $_GET['_id'] && ($_GET['idtype'] == 'object' || $_GET['idtype'] == 'array')) {
         $_GET['_id'] = unserialize($_GET['_id']);
+        if (is_array($_GET['_id'])) {
+            $_GET['_id'] = json_encode($_GET['_id']);
+        }
     }
     echo $html->h1(isset($_GET['_id']) && $_GET['_id'] ? get::htmlentities($_GET['_id']) : '[New Object]');
     echo $html->div($form->getInput(array('type' => 'submit', 'value' => 'Save Changes', 'class' => 'ui-state-hover')));
