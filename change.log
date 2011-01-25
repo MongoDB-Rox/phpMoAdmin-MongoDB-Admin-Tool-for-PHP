@@ -1,3 +1,8 @@
+Version 1.0.9
+Added ability to limit access to a whitelist of databases
+Added REPLICA_SET option
+Switched default theme to trontastic (in response to user-feedback)
+
 Version 1.0.8
 Added explicit typecasting to search and automated numeric-search typecasting
 Added $natural sorting option

@@ -6,7 +6,7 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.0.8
+ * @version 1.0.9
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  * @license GPL v3 - http://vork.us/go/mvz5
  */
@@ -18,6 +18,17 @@
 //$accessControl = array('scott' => 'tiger');
 
 /**
+ * Uncomment to restrict databases-access to just the databases added to the array below
+ * uncommenting will also remove the ability to create a new database
+ */
+//moadminModel::$databaseWhitelist = array('admin');
+
+/**
+ * Sets the design theme - themes options are: swanky-purse, trontastic and classic
+ */
+define('THEME', 'trontastic');
+
+/**
  * To connect to a remote or authenticated Mongo instance, define the connection string in the MONGO_CONNECTION constant
  * mongodb://[username:password@]host1[:port1][,host2[:port2:],...]
  * If you do not know what this means then it is not relevant to your application and you can safely leave it as-is
@@ -25,9 +36,10 @@
 define('MONGO_CONNECTION', '');
 
 /**
- * Sets the design theme - themes options are: swanky-purse, trontastic and classic
+ * Set to true when connecting to a Mongo replicaSet
+ * If you do not know what this means then it is not relevant to your application and you can safely leave it as-is
  */
-define('THEME', 'swanky-purse');
+define('REPLICA_SET', false);
 
 /**
  * Default limit for number of objects to display per page - set to 0 for no limit
@@ -229,7 +241,7 @@ class moadminModel {
      * Name of last selected DB
      * @var string Defaults to admin as that is available in all Mongo instances
      */
-    protected $_dbName = 'admin';
+    public static $dbName = 'admin';
 
     /**
      * MongoDB
@@ -242,7 +254,8 @@ class moadminModel {
      * @return Mongo
      */
     protected function _mongo() {
-        return (!MONGO_CONNECTION ? new Mongo() : new Mongo(MONGO_CONNECTION));
+        $connection = (!MONGO_CONNECTION ? 'mongodb://localhost:27017' : MONGO_CONNECTION);
+        return (!REPLICA_SET ? new Mongo($connection) : new Mongo($connection, array('replicaSet' => true)));
     }
 
     /**
@@ -250,6 +263,9 @@ class moadminModel {
      * @param string $db
      */
     public function __construct($db = null) {
+        if (self::$databaseWhitelist && !in_array($db, self::$databaseWhitelist)) {
+            $db = self::$dbName = $_GET['db'] = current(self::$databaseWhitelist);
+        }
         if ($db) {
             if (!extension_loaded('mongo')) {
                 throw new mongoExtensionNotInstalled();
@@ -279,11 +295,14 @@ class moadminModel {
      * @param string $db
      */
     public function setDb($db) {
+        if (self::$databaseWhitelist && !in_array($db, self::$databaseWhitelist)) {
+            $db = current(self::$databaseWhitelist);
+        }
         if (!isset($this->_db)) {
             $this->_db = $this->_mongo();
         }
         $this->mongo = $this->_db->selectDB($db);
-        $this->_dbName = $db;
+        self::$dbName = $db;
     }
 
     /**
@@ -293,15 +312,25 @@ class moadminModel {
     public $totalDbSize = 0;
 
     /**
+     * Adds ability to restrict databases-access to those on the whitelist
+     * @var array
+     */
+    public static $databaseWhitelist = array();
+
+    /**
      * Gets list of databases
      * @return array
      */
     public function listDbs() {
+        $return = array();
+        $restrictDbs = (bool) self::$databaseWhitelist;
         $dbs = $this->_db->selectDB('admin')->command(array('listDatabases' => 1));
         $this->totalDbSize = $dbs['totalSize'];
         foreach ($dbs['databases'] as $db) {
-            $return[$db['name']] = $db['name'] . ' ('
-                                 . (!$db['empty'] ? round($db['sizeOnDisk'] / 1000000) . 'mb' : 'empty') . ')';
+            if (!$restrictDbs || in_array($db['name'], self::$databaseWhitelist)) {
+                $return[$db['name']] = $db['name'] . ' ('
+                                     . (!$db['empty'] ? round($db['sizeOnDisk'] / 1000000) . 'mb' : 'empty') . ')';
+            }
         }
         ksort($return);
         $dbCount = 0;
@@ -334,7 +363,7 @@ class moadminModel {
                           . ' minutes';
         $unshift['mongo'] = $return['version'] . ' (' . $return['bits'] . '-bit)';
         $unshift['mongoPhpDriver'] = Mongo::VERSION;
-        $unshift['phpMoAdmin'] = '1.0.8';
+        $unshift['phpMoAdmin'] = '1.0.9';
         $unshift['php'] = PHP_VERSION . ' (' . (PHP_INT_MAX > 2200000000 ? 64 : 32) . '-bit)';
         $unshift['gitVersion'] = $return['gitVersion'];
         unset($return['ok'], $return['version'], $return['gitVersion'], $return['bits']);
@@ -413,8 +442,8 @@ class moadminModel {
      */
     public function renameCollection($from, $to) {
         $result = $this->_db->selectDB('admin')->command(array(
-            'renameCollection' => $this->_dbName . '.' . $from,
-            'to' => $this->_dbName . '.' . $to,
+            'renameCollection' => self::$dbName . '.' . $from,
+            'to' => self::$dbName . '.' . $to,
         ));
     }
 
@@ -1818,7 +1847,7 @@ if (get_magic_quotes_gpc()) {
 }
 
 if (!isset($_GET['db'])) {
-    $_GET['db'] = 'admin';
+    $_GET['db'] = moadminModel::$dbName;
 } else if (strpos($_GET['db'], '.') !== false) {
     $_GET['db'] = $_GET['newdb'];
 }
@@ -1996,7 +2025,9 @@ echo $html->div($form->getSelect(array('name' => 'db', 'options' => $mo->mongo['
               . '</span> [' . $html->link("javascript: mo.repairDatabase('" . get::htmlentities($db)
               . "'); void(0);", 'repair database') . '] [' . $html->link("javascript: mo.dropDatabase('"
               . get::htmlentities($db) . "'); void(0);", 'drop database') . ']');
-echo $form->getFormClose() . $html->jsInline('var mo = {}
+echo $form->getFormClose();
+
+$js = 'var mo = {}
 mo.urlEncode = function(str) {
     return escape(str)'
         . '.replace(/\+/g, "%2B").replace(/%20/g, "+").replace(/\*/g, "%2A").replace(/\//g, "%2F").replace(/@/g, "%40");
@@ -2014,11 +2045,15 @@ mo.dropDatabase = function(db) {
             window.location.replace("' . $baseUrl . '?db=' . $dbUrl . '&action=dropDb");
         });
     });
-}
+}';
+if (!moadminModel::$databaseWhitelist) {
+    $js .= '
 $("select[name=db]").prepend(\'<option value="new.database">Use new ==&gt;</option>\')'
     . '.after(\'<input type="text" name="newdb" name style="display: none;" />\').change(function() {
     ($(this).val() == "new.database" ? $("input[name=newdb]").show() : $("input[name=newdb]").hide());
-});
+});';
+}
+$js .= '
 mo.confirm = function(dialog, func, title) {
     if (typeof title == "undefined") {
         title = "Please confirm:";
@@ -2032,7 +2067,8 @@ mo.confirm = function(dialog, func, title) {
 		Cancel: function() {$(this).dialog("close");}
 	}}).dialog("open");
 }
-');
+';
+echo $html->jsInline($js);
 
 if (isset($_GET['collection'])) {
     $collection = get::htmlentities($_GET['collection']);
