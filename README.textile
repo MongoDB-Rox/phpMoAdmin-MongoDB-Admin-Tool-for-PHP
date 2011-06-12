@@ -2,13 +2,13 @@ h1. phpMoAdmin
 
 h2. MongoDB administration tool for PHP
 
-h3. Built on a stripped-down version of the Vork high-performance framework
+h3. Built on a stripped-down version of the high-performance Vork Enterprise Framework
 
     "phpMoAdmin":http://www.phpMoAdmin.com - "MongoDB":http://www.MongoDB.org - "Vork":http://www.Vork.us
 
     * *Nothing to configure* - place the moadmin.php file anywhere on your web site and *it just works!*
     * Fast *AJAX-driven XHTML 1.1* interface operates consistently in every browser!
-    * *Self-contained in a single 95kb file!*
+    * *Self-contained in a single 110kb file!*
     * Works on any version of PHP5 with the MongoDB NoSQL database & Mongo PHP driver installed and running.
     * Instructional error messages - *phpMoAdmin can be used as a PHP-Mongo connection debugging tool*
     * Super flexible - search for:
@@ -17,6 +17,14 @@ h3. Built on a stripped-down version of the Vork high-performance framework
         + text with * wildcards
         + Regular Expressions (regex)
         + JSON (with Mongo-operators enabled)
+    * Import/export data in JSON format
+        + Export full collections or limit recordset to the results of a query
+            * Option to export exact page contents or entire query results (ignoring limit and skip values)
+        + Import can specify:
+            * Insert new records only
+            * Save / upsert (adds new & overwrites existing with same _id)
+            * Update only pre-existing records
+            * Insert until a duplicate is found and then halt import
     * Option to enable password-protection for one or more users
         + To activate protection, just add the username-password(s) to the array at the top of the file.
     * E_STRICT PHP code is formatted to the Zend Framework coding standards
@@ -64,7 +72,15 @@ h2. Features
           o Sort by any key within your data object (even nested sub-keys!) with ascending/descending option
                 + Option to sort by $natural for rapid browsing of large datasets
           o Create/delete objects
-          o Edit object data
+          o Edit object data using standard PHP object/array syntax
+          o Export to JSON format
+                + Full collections or limited recordset based on the results of a query
+                + Export exact page contents or entire query results (ignoring limit and skip values)
+          o Import from JSON format
+                + Insert new records only
+                + Save / upsert (adds new & overwrites existing with same _id)
+                + Update only pre-existing records
+                + Insert until a duplicate is found and then halt import
     * Mongo GridFS
           o GridFS objects automatically link GridFS chunks to GridFS files
     * MongoDB stats

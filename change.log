@@ -1,5 +1,9 @@
+Version 1.1.0
+Added import/export of data in JSON format
+Updated all formHelper methods and get::url() to the improved versions in the current Vork core
+
 Version 1.0.9
-Added ability to limit access to a whitelist of databases
+Added ability to limit usage to a whitelist of databases (ignoring any others on the same server)
 Added REPLICA_SET option
 Switched default theme to trontastic (in response to user-feedback)
 
