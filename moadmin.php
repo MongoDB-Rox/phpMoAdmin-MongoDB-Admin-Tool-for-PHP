@@ -862,15 +862,10 @@ class htmlHelper {
     protected $_jsSingleton = array(), $_cssSingleton = array();
 
     /**
-     * Sets the protocol (http/https)
+     * Sets the protocol (http/https) - this is modified from the original Vork version for phpMoAdmin usage
      */
     public function __construct() {
-        if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on') {
-            $this->_linkPrefix = 'http://' . $_SERVER['HTTP_HOST'];
-            $this->_protocol = 'https://';
-        } else {
-            $this->_protocol = 'http://';
-        }
+        $this->_protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on' ? 'https://' : 'http://');
     }
 
     /**
