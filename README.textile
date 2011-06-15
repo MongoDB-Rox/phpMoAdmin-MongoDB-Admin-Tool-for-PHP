@@ -19,12 +19,12 @@ h3. Built on a stripped-down version of the high-performance Vork Enterprise Fra
         + JSON (with Mongo-operators enabled)
     * Import/export data in JSON format
         + Export full collections or limit recordset to the results of a query
-            * Option to export exact page contents or entire query results (ignoring limit and skip values)
+            + Option to export exact page contents or entire query results (ignoring limit and skip values)
         + Import can specify:
-            * Insert new records only
-            * Save / upsert (adds new & overwrites existing with same _id)
-            * Update only pre-existing records
-            * Insert until a duplicate is found and then halt import
+            + Insert new records only
+            + Save / upsert (adds new & overwrites existing with same _id)
+            + Update only pre-existing records
+            + Insert until a duplicate is found and then halt import
     * Option to enable password-protection for one or more users
         + To activate protection, just add the username-password(s) to the array at the top of the file.
     * E_STRICT PHP code is formatted to the Zend Framework coding standards
@@ -62,25 +62,25 @@ h2. Features
           o Rename collection
           o List indexes
           o Create/drop indexes
-                + multiple keys
-                + ascending/descending
-                + unique index
+                o multiple keys
+                o ascending/descending
+                o unique index
     * Data objects
           o Search for exact-text, (type-casted) value, text with * wildcards, regex or JSON (with Mongo-operators enabled)
           o Show objects with 3-different viewing options (full, compact & uniform)
           o Option to query MongoDB using JSON or a PHP array
           o Sort by any key within your data object (even nested sub-keys!) with ascending/descending option
-                + Option to sort by $natural for rapid browsing of large datasets
+                o Option to sort by $natural for rapid browsing of large datasets
           o Create/delete objects
           o Edit object data using standard PHP object/array syntax
           o Export to JSON format
-                + Full collections or limited recordset based on the results of a query
-                + Export exact page contents or entire query results (ignoring limit and skip values)
+                o Full collections or limited recordset based on the results of a query
+                o Export exact page contents or entire query results (ignoring limit and skip values)
           o Import from JSON format
-                + Insert new records only
-                + Save / upsert (adds new & overwrites existing with same _id)
-                + Update only pre-existing records
-                + Insert until a duplicate is found and then halt import
+                o Insert new records only
+                o Save / upsert (adds new & overwrites existing with same _id)
+                o Update only pre-existing records
+                o Insert until a duplicate is found and then halt import
     * Mongo GridFS
           o GridFS objects automatically link GridFS chunks to GridFS files
     * MongoDB stats
