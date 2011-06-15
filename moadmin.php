@@ -68,6 +68,12 @@ class get {
     public static $loadedObjects = array();
 
     /**
+     * Is PHP Version 5.2.3 or better when htmlentities() added its fourth argument
+     * @var Boolean
+     */
+    public static $isPhp523orNewer = true;
+
+    /**
      * Gets the current URL
      *
      * @param array Optional, keys:
@@ -114,18 +120,19 @@ class get {
      * fourth parameter $doubleEncode to false. Also adds ability to pass a null value to get the default $quoteStyle
      * and $charset (removes need to repeatedly define ENT_COMPAT, 'UTF-8', just to access the $doubleEncode argument)
      *
-     * If you are using a PHP version prior to 5.2.3 the $doubleEncode parameter is not available so you will need
-     * to comment out the last parameter in the return clause (including the preceding comma)
+     * If you are using a PHP version prior to 5.2.3 the $doubleEncode parameter is not available and won't do anything
      *
      * @param string $string
      * @param int $quoteStyle Uses ENT_COMPAT if null or omitted
      * @param string $charset Uses UTF-8 if null or omitted
-     * @param boolean $doubleEncode
+     * @param boolean $doubleEncode This is ignored in old versions of PHP before 5.2.3
      * @return string
      */
     public static function htmlentities($string, $quoteStyle = ENT_COMPAT, $charset = 'UTF-8', $doubleEncode = false) {
-        return htmlentities($string, (!is_null($quoteStyle) ? $quoteStyle : ENT_COMPAT),
-                            (!is_null($charset) ? $charset : 'UTF-8'), $doubleEncode);
+        $quoteStyle = (!is_null($quoteStyle) ? $quoteStyle : ENT_COMPAT);
+        $charset = (!is_null($charset) ? $charset : 'UTF-8');
+        return (self::$isPhp523orNewer ? htmlentities($string, $quoteStyle, $charset, $doubleEncode)
+                                       : htmlentities($string, $quoteStyle, $charset));
     }
 
     /**
@@ -1963,6 +1970,8 @@ try {
     exit(0);
 }
 $html = get::helper('html');
+$ver = explode('.', phpversion());
+get::$isPhp523orNewer = ($ver[0] >= 5 && ($ver[1] > 2 || ($ver[1] == 2 && $ver[2] >= 3)));
 $form = new formHelper;
 $mo = new moadminComponent;
 
