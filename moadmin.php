@@ -24,7 +24,7 @@
 //moadminModel::$databaseWhitelist = array('admin');
 
 /**
- * Sets the design theme - themes options are: swanky-purse, trontastic and classic
+ * Sets the design theme - themes options are: swanky-purse, trontastic, simple-gray and classic
  */
 define('THEME', 'trontastic');
 
