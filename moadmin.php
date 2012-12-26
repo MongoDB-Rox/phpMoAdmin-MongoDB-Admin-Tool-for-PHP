@@ -1993,8 +1993,8 @@ if (isset($_GET['export']) && isset($mo->mongo['listRows'])) {
  * phpMoAdmin front-end view-element
  */
 $headerArgs['title'] = (isset($_GET['action']) ? 'phpMoAdmin - ' . get::htmlentities($_GET['action']) : 'phpMoAdmin');
-if (THEME != 'trontastic') {
-    $headerArgs['jqueryTheme'] = (in_array(THEME, array('swanky-purse', 'classic', 'simple-gray')) ? THEME : 'classic');
+if (THEME != 'classic') {
+    $headerArgs['jqueryTheme'] = (in_array(THEME, array('swanky-purse', 'trontastic', 'simple-gray')) ? THEME : 'classic');
 }
 $headerArgs['cssInline'] = '
 /* reset */
