@@ -1,3 +1,6 @@
+Version 1.1.1
+Added simple-gray theme (thank you Xeoncross)
+
 Version 1.1.0
 Added import/export of data in JSON format
 Updated all formHelper methods and get::url() to the improved versions in the current Vork core
