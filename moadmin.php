@@ -6,7 +6,7 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.1.0
+ * @version 1.1.1
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  * @license GPL v3 - http://vork.us/go/mvz5
  */
@@ -1993,8 +1993,8 @@ if (isset($_GET['export']) && isset($mo->mongo['listRows'])) {
  * phpMoAdmin front-end view-element
  */
 $headerArgs['title'] = (isset($_GET['action']) ? 'phpMoAdmin - ' . get::htmlentities($_GET['action']) : 'phpMoAdmin');
-if (THEME != 'classic') {
-    $headerArgs['jqueryTheme'] = (in_array(THEME, array('swanky-purse', 'trontastic')) ? THEME : 'trontastic');
+if (THEME != 'trontastic') {
+    $headerArgs['jqueryTheme'] = (in_array(THEME, array('swanky-purse', 'classic', 'simple-gray')) ? THEME : 'classic');
 }
 $headerArgs['cssInline'] = '
 /* reset */
@@ -2052,14 +2052,14 @@ li .ui-widget-content {margin: 1px 1px 3px 1px;}
 
 switch (THEME) {
     case 'swanky-purse':
-    $headerArgs['cssInline'] .= '
+        $headerArgs['cssInline'] .= '
 html {background: #261803;}
 h1, .rownumber {color: #baaa5a;}
 body {background: #4c3a1d url(http://jquery-ui.googlecode.com/svn/tags/1.7.2/themes/swanky-purse/images/ui-bg_diamond_25_675423_10x8.png) 50% 50% repeat;}
 #moadminlogo {color: #baaa5a;}
 li .ui-widget-header {margin: 0px 1px 0px 1px;}
 .ui-widget-header .rownumber {margin-top: 2px; margin-right: -1px;}';
-    break;
+        break;
     case 'classic':
         $headerArgs['cssInline'] .= '
 html, .ui-widget-header, button {background: #ccc78c;}
@@ -2078,17 +2078,37 @@ li .ui-widget-header {margin: 0px 1px 0px 1px;}
 .ui-dialog .ui-icon-closethick, .ui-dialog button {float: right; margin: 4px;}
 .ui-dialog .ui-icon-closethick {margin-top: -13px;}
 body:first-of-type .ui-dialog .ui-icon-closethick {margin-top: -2px;} /*Chrome/Safari*/
-.ui-resizable { position: relative;}
-.ui-resizable-handle { position: absolute;font-size: 0.1px;z-index: 99999; display: block;}
-.ui-resizable-disabled .ui-resizable-handle, .ui-resizable-autohide .ui-resizable-handle { display: none; }
-.ui-resizable-n { cursor: n-resize; height: 7px; width: 100%; top: -5px; left: 0px; }
-.ui-resizable-s { cursor: s-resize; height: 7px; width: 100%; bottom: -5px; left: 0px; }
-.ui-resizable-e { cursor: e-resize; width: 7px; right: -5px; top: 0px; height: 100%; }
-.ui-resizable-w { cursor: w-resize; width: 7px; left: -5px; top: 0px; height: 100%; }
-.ui-resizable-se { cursor: se-resize; width: 12px; height: 12px; right: 1px; bottom: 1px; }
-.ui-resizable-sw { cursor: sw-resize; width: 9px; height: 9px; left: -5px; bottom: -5px; }
-.ui-resizable-nw { cursor: nw-resize; width: 9px; height: 9px; left: -5px; top: -5px; }
-.ui-resizable-ne { cursor: ne-resize; width: 9px; height: 9px; right: -5px; top: -5px;}';
+.ui-resizable {position: relative;}
+.ui-resizable-handle {position: absolute;font-size: 0.1px;z-index: 99999; display: block;}
+.ui-resizable-disabled .ui-resizable-handle, .ui-resizable-autohide .ui-resizable-handle {display: none;}
+.ui-resizable-n {cursor: n-resize; height: 7px; width: 100%; top: -5px; left: 0px;}
+.ui-resizable-s {cursor: s-resize; height: 7px; width: 100%; bottom: -5px; left: 0px;}
+.ui-resizable-e {cursor: e-resize; width: 7px; right: -5px; top: 0px; height: 100%;}
+.ui-resizable-w {cursor: w-resize; width: 7px; left: -5px; top: 0px; height: 100%;}
+.ui-resizable-se {cursor: se-resize; width: 12px; height: 12px; right: 1px; bottom: 1px;}
+.ui-resizable-sw {cursor: sw-resize; width: 9px; height: 9px; left: -5px; bottom: -5px;}
+.ui-resizable-nw {cursor: nw-resize; width: 9px; height: 9px; left: -5px; top: -5px;}
+.ui-resizable-ne {cursor: ne-resize; width: 9px; height: 9px; right: -5px; top: -5px;}';
+        break;
+    case 'simple-gray':
+        $headerArgs['cssInline'] .= '
+html, body {background: #eee; color: #333;}
+body {font-family: sans-serif, Arial;}
+pre {font-size: 13px; padding: 10px; margin: 0; background: #fff; border: none;}
+#moadminlogo {background: none;}
+a, .textLink {font-weight: normal;}
+a, .textLink, #moadminlogo, h1 {color: #0088cc;}
+a:hover, .textLink:hover {color: #005580;}
+li .ui-widget-content, li .ui-widget-header {background: #ffe; line-height: 2em; margin: 0 !important;
+border-bottom: 1px solid #eee;}
+ol a {font-weight: bold;}
+#mongo_rows ol {margin: 1em 0;}
+.ui-dialog, #mongo_rows ol li {border-radius: 4px; background: #f7f7f7; margin-bottom: .5em; padding: .5em; border: 1px solid #ddd;}
+.ui-dialog .ui-dialog-titlebar {padding: 3px; margin: 1px; border: 3px ridge;}
+.ui-dialog #confirm {padding: 10px;}
+.ui-dialog .ui-icon-closethick, .ui-dialog button {margin: 4px;}
+.ui-dialog .ui-icon-closethick {float: right; margin-top: -4px; font-size: large;}
+';
         break;
 }
 echo $html->header($headerArgs);
