@@ -6,7 +6,7 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.1.1
+ * @version 1.1.2
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  * @license GPL v3 - http://vork.us/go/mvz5
  */
@@ -72,6 +72,12 @@ class get {
      * @var Boolean
      */
     public static $isPhp523orNewer = true;
+
+    /**
+     * Mongo Version
+     * @var int
+     */
+    protected $_mongo_version;
 
     /**
      * Gets the current URL
@@ -294,7 +300,8 @@ class moadminModel {
      */
     protected function _mongo() {
         $connection = (!MONGO_CONNECTION ? 'mongodb://localhost:27017' : MONGO_CONNECTION);
-        return (!REPLICA_SET ? new Mongo($connection) : new Mongo($connection, array('replicaSet' => true)));
+        $className  = ( class_exists('MongoClient') ) ? 'MongoClient' : 'Mongo';
+        return (!REPLICA_SET ? new $className($connection) : new $className($connection, array('replicaSet' => true)));
     }
 
     /**
@@ -311,6 +318,9 @@ class moadminModel {
             }
             try {
                 $this->_db = $this->_mongo();
+                // -- Fixes  unexpected T_PAAMAYIM_NEKUDOTAYIM when getting mongo version.
+                $mongo = &$this->_db;
+                $this->_mongo_version = $mongo::VERSION;
                 $this->mongo = $this->_db->selectDB($db);
             } catch (MongoConnectionException $e) {
                 throw new cannotConnectToMongoServer();
@@ -504,7 +514,10 @@ class moadminModel {
      * @param array $unique
      */
     public function ensureIndex($collection, array $indexes, array $unique) {
-        $unique = ($unique ? true : false); //signature requires a bool in both Mongo v. 1.0.1 and 1.2.0
+        if (version_compare($this->_mongo_version, '1.2.11', '>=') >= 0) //-- fixes ensureindex in mongo driver > 1.2.11
+            $unique = array('unique', true);
+        else
+            $unique = ($unique ? true : false); //signature requires a bool in both Mongo v. 1.0.1 and 1.2.0
         $this->mongo->selectCollection($collection)->ensureIndex($indexes, $unique);
     }
 
@@ -916,7 +929,7 @@ class htmlHelper {
                 case 'cssSingleton':
                 case 'jqueryTheme':
                     if ($tagType == 'jqueryTheme') {
-                        $arg = 'http://ajax.googleapis.com/ajax/libs/jqueryui/1/themes/'
+                        $arg = '//ajax.googleapis.com/ajax/libs/jqueryui/1/themes/'
                              . str_replace(' ', '-', strtolower($arg)) . '/jquery-ui.css';
                         $tagType = 'css';
                     }
