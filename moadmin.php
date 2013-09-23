@@ -294,7 +294,11 @@ class moadminModel {
      */
     protected function _mongo() {
         $connection = (!MONGO_CONNECTION ? 'mongodb://localhost:27017' : MONGO_CONNECTION);
-        return (!REPLICA_SET ? new Mongo($connection) : new Mongo($connection, array('replicaSet' => true)));
+        if (class_exists('MongoClient') === true) {
+            return (!REPLICA_SET ? new MongoClient($connection) : new MongoClient($connection, array('replicaSet' => true)));
+        } else {
+            return (!REPLICA_SET ? new Mongo($connection) : new Mongo($connection, array('replicaSet' => true)));
+        }
     }
 
     /**
@@ -1132,8 +1136,7 @@ class htmlHelper {
                 $return .= PHP_EOL . (is_array($head) ? implode(PHP_EOL, $head) : $head);
             }
 
-            $return .= PHP_EOL . '</head>' . PHP_EOL . '<body>'
-                    . $this->js('https://GoChat.us/chat.js#identity=5047dd509c3a8dd8fec07b5b&appid=phpmoadmin.com');
+            $return .= PHP_EOL . '</head>' . PHP_EOL . '<body>';
             return $return;
         } else {
             $errorMsg = 'Invalid usage of ' . __METHOD__ . '() - the header has already been returned';
