@@ -6,7 +6,7 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.1.2
+ * @version 1.1.3
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  * @license GPL v3 - http://vork.us/go/mvz5
  */
@@ -294,7 +294,8 @@ class moadminModel {
      */
     protected function _mongo() {
         $connection = (!MONGO_CONNECTION ? 'mongodb://localhost:27017' : MONGO_CONNECTION);
-        return (!REPLICA_SET ? new Mongo($connection) : new Mongo($connection, array('replicaSet' => true)));
+        $Mongo = (class_exists('MongoClient') === true ? 'MongoClient' : 'Mongo');
+        return (!REPLICA_SET ? new $Mongo($connection) : new $Mongo($connection, array('replicaSet' => true)));
     }
 
     /**
