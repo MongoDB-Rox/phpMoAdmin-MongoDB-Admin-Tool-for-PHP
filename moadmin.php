@@ -917,7 +917,7 @@ class htmlHelper {
                 case 'cssSingleton':
                 case 'jqueryTheme':
                     if ($tagType == 'jqueryTheme') {
-                        $arg = 'http://ajax.googleapis.com/ajax/libs/jqueryui/1/themes/'
+                        $arg = $this->_protocol . 'ajax.googleapis.com/ajax/libs/jqueryui/1/themes/'
                              . str_replace(' ', '-', strtolower($arg)) . '/jquery-ui.css';
                         $tagType = 'css';
                     }
@@ -2057,7 +2057,7 @@ switch (THEME) {
         $headerArgs['cssInline'] .= '
 html {background: #261803;}
 h1, .rownumber {color: #baaa5a;}
-body {background: #4c3a1d url(http://jquery-ui.googlecode.com/svn/tags/1.7.2/themes/swanky-purse/images/ui-bg_diamond_25_675423_10x8.png) 50% 50% repeat;}
+body {background: #4c3a1d url(//jquery-ui.googlecode.com/svn/tags/1.7.2/themes/swanky-purse/images/ui-bg_diamond_25_675423_10x8.png) 50% 50% repeat;}
 #moadminlogo {color: #baaa5a;}
 li .ui-widget-header {margin: 0px 1px 0px 1px;}
 .ui-widget-header .rownumber {margin-top: 2px; margin-right: -1px;}';
