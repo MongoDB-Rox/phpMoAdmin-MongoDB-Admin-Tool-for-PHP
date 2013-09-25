@@ -1,5 +1,6 @@
 Version 1.1.3
 Added support for MongoClient connection manager
+Made phpMoAdmin SSL-friendly
 
 Version 1.1.2
 Added GoChat
