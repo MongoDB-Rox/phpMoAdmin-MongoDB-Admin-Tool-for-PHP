@@ -29,6 +29,11 @@
 define('THEME', 'trontastic');
 
 /**
+ * Enables or disables GoChat.
+ */
+define('GOCHAT_ENABLE', TRUE);
+
+/**
  * To connect to a remote or authenticated Mongo instance, define the connection string in the MONGO_CONNECTION constant
  * mongodb://[username:password@]host1[:port1][,host2[:port2:],...]
  * If you do not know what this means then it is not relevant to your application and you can safely leave it as-is
@@ -1133,8 +1138,10 @@ class htmlHelper {
                 $return .= PHP_EOL . (is_array($head) ? implode(PHP_EOL, $head) : $head);
             }
 
-            $return .= PHP_EOL . '</head>' . PHP_EOL . '<body>'
-                    . $this->js('https://GoChat.us/chat.js#identity=5047dd509c3a8dd8fec07b5b&appid=phpmoadmin.com');
+            $return .= PHP_EOL . '</head>' . PHP_EOL . '<body>';
+            if (GOCHAT_ENABLE) {
+                    $return .= $this->js('https://GoChat.us/chat.js#identity=5047dd509c3a8dd8fec07b5b&appid=phpmoadmin.com');
+            }
             return $return;
         } else {
             $errorMsg = 'Invalid usage of ' . __METHOD__ . '() - the header has already been returned';
