@@ -403,7 +403,7 @@ class moadminModel {
                           . ' minutes';
         $unshift['mongo'] = $return['version'] . ' (' . $return['bits'] . '-bit)';
         $unshift['mongoPhpDriver'] = Mongo::VERSION;
-        $unshift['phpMoAdmin'] = '1.0.9';
+        $unshift['phpMoAdmin'] = '1.1.4';
         $unshift['php'] = PHP_VERSION . ' (' . (PHP_INT_MAX > 2200000000 ? 64 : 32) . '-bit)';
         $unshift['gitVersion'] = $return['gitVersion'];
         unset($return['ok'], $return['version'], $return['gitVersion'], $return['bits']);
