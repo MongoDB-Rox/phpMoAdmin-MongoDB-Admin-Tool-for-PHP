@@ -2424,7 +2424,7 @@ mo.submitSort = function() {
 }
 mo.submitSearch = function() {
     document.location = '" . $baseUrl . '?' . http_build_query($searchGet) . "&search='
-                      + $('#search').val() + '&searchField=' + $('#searchField').val();
+                      + encodeURIComponent($('#search').val()) + '&searchField=' + $('#searchField').val();
 }
 mo.submitQuery = function() {
     document.location = '" . $baseUrl . '?' . http_build_query($queryGet) . "&find=' + $('#find').val();
