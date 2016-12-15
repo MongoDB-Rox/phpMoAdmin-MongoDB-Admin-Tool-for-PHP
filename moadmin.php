@@ -135,6 +135,20 @@ class get {
                                        : htmlentities($string, $quoteStyle, $charset));
     }
 
+	/** 
+	 * Generates a HTML nested list from an array by recursive traversal.
+	 */
+	public function array_to_list($array){
+            foreach( $array as $k => $v ){
+        	if( is_array( $v ) ){
+            	    $out .= '<li>' . $k . ': <ul>' . self::array_to_list( $v ).'</ul></li>';
+        	} else {
+            	    $out .= '<li>' . $k . ': ' . $v . '</li>';
+        	}
+            }
+            return $out;
+	}
+
     /**
      * Initialize the character maps needed for the xhtmlentities() method and verifies the argument values
      * passed to it are valid.
@@ -2582,20 +2596,9 @@ mo.submitQuery = function() {
 ' . $dbcollnavJs);
 } else if (isset($mo->mongo['getStats'])) {
     echo '<ul>';
-    foreach ($mo->mongo['getStats'] as $key => $val) {
-        echo '<li>';
-        if (!is_array($val)) {
-            echo $key . ': ' . $val;
-        } else {
-            echo $key . '<ul>';
-            foreach ($val as $subkey => $subval) {
-                echo $html->li($subkey . ': ' . $subval);
-            }
-            echo '</ul>';
-        }
-        echo '</li>';
-    }
+    echo get::array_to_list( $mo->mongo['getStats'] );
     echo '</ul>';
+
 }
 echo '</div>'; //end of bodycontent
 
