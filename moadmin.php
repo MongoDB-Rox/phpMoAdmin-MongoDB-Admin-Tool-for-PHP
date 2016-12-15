@@ -1352,6 +1352,29 @@ var dom = function(id) {
     }
 
     /**
+     * Creates a list from an array with automatic nesting
+     *
+     * @param array $list
+     * @param string $kvDelimiter Optional, sets delimiter to appear between keys and values
+     * @param string $listType Optional, must be a valid HTML list type, either "ul" (default) or "ol"
+     * @return string
+     */
+    public function drillDownList(array $list, $kvDelimiter = ': ', $listType = 'ul') {
+        foreach ($list as $key => $val) {
+            $val = (is_array($val) ? $this->drillDownList($val, $kvDelimiter, $listType) : $val);
+            $str = trim($key && !is_int($key) ? $key . $kvDelimiter . $val : $val);
+            if ($str) {
+                $return[] = $this->li($str);
+            }
+        }
+        if (isset($return)) {
+            return ($listType ? '<' . $listType . '>' : '')
+                 . implode(PHP_EOL, $return)
+                 . ($listType ? '</' . $listType . '>' : '');
+        }
+    }
+
+    /**
      * Returns a list of notifications if there are any - similar to the Flash feature of Ruby on Rails
      *
      * @param mixed $messages String or an array of strings
@@ -2581,21 +2604,7 @@ mo.submitQuery = function() {
         . '"min-height": "450px", "max-height": "2000px", "width": "auto", "height": "auto"}).resizable();
 ' . $dbcollnavJs);
 } else if (isset($mo->mongo['getStats'])) {
-    echo '<ul>';
-    foreach ($mo->mongo['getStats'] as $key => $val) {
-        echo '<li>';
-        if (!is_array($val)) {
-            echo $key . ': ' . $val;
-        } else {
-            echo $key . '<ul>';
-            foreach ($val as $subkey => $subval) {
-                echo $html->li($subkey . ': ' . $subval);
-            }
-            echo '</ul>';
-        }
-        echo '</li>';
-    }
-    echo '</ul>';
+    echo $html->drillDownList($mo->mongo['getStats']);
 }
 echo '</div>'; //end of bodycontent
 
