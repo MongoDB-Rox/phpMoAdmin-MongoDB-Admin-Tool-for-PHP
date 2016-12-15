@@ -2385,11 +2385,19 @@ if (isset($mo->mongo['listRows'])) {
         $url = $baseUrl . '?' . http_build_query($get) . '&collection=' . urlencode($collection) . '&skip=';
         $paginator = number_format($skip + 1) . '-' . number_format(min($skip + $objCount, $mo->mongo['count']))
                    . ' of ' . $paginator;
+        $remainder = ($mo->mongo['count'] % $_SESSION['limit']);
+        $lastPage = ($mo->mongo['count'] - ($remainder ? $remainder : $_SESSION['limit']));
+        $isLastPage = ($mo->mongo['count'] <= ($objCount + $skip));
         if ($skip) { //back
-            $paginator = addslashes($html->link($url . max($skip - $objCount, 0), '&lt;&lt;&lt;')) . ' ' . $paginator;
+            $backPage = (!$isLastPage ? max($skip - $objCount, 0) : ($lastPage - $_SESSION['limit']));
+            $backLinks = $html->link($url . 0, '{{', array('title' => 'First')) . ' '
+                       . $html->link($url . $backPage, '&lt;&lt;&lt;', array('title' => 'Previous'));
+            $paginator = addslashes($backLinks) . ' ' . $paginator;
         }
-        if ($mo->mongo['count'] > ($objCount + $skip)) { //forward
-            $paginator .= ' ' . addslashes($html->link($url . ($skip + $objCount), '&gt;&gt;&gt;'));
+        if (!$isLastPage) { //forward
+            $forwardLinks = $html->link($url . ($skip + $objCount), '&gt;&gt;&gt;', array('title' => 'Next')) . ' '
+                          . $html->link($url . $lastPage, '}}', array('title' => 'Last'));
+            $paginator .= ' ' . addslashes($forwardLinks);
         }
     }
 
