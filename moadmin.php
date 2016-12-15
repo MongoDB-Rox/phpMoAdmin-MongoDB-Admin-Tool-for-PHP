@@ -553,7 +553,7 @@ class moadminModel {
         if (isset($_GET['find']) && $_GET['find']) {
             $_GET['find'] = trim($_GET['find']);
             if (strpos($_GET['find'], 'array') === 0) {
-                eval('$find = ' . $_GET['find'] . ';');
+                eval('$find = ' . escapeshellarg($_GET['find']) . ';');
             } else if (is_string($_GET['find'])) {
                 if ($findArr = json_decode($_GET['find'], true)) {
                     $find = $findArr;
@@ -691,7 +691,7 @@ class moadminModel {
      * @return array
      */
     public function saveObject($collection, $obj) {
-        eval('$obj=' . $obj . ';'); //cast from string to array
+        eval('$obj=' . escapeshellarg($obj) . ';'); //cast from string to array
         return $this->mongo->selectCollection($collection)->save($obj);
     }
 
@@ -1982,35 +1982,48 @@ if (get_magic_quotes_gpc()) {
     $_POST = phpMoAdmin::stripslashes($_POST);
 }
 
-if (!isset($_GET['db'])) {
-    $_GET['db'] = moadminModel::$dbName;
-} else if (strpos($_GET['db'], '.') !== false) {
-    $_GET['db'] = $_GET['newdb'];
+if (isset($accessControl) && !isset($_SESSION['user']) && isset($_POST['username'])) {
+    $_POST = array_map('trim', $_POST);
+    if (isset($accessControl[$_POST['username']]) && $accessControl[$_POST['username']] == $_POST['password']) {
+        $_SESSION['user'] = $_POST['username'];
+    } else {
+        $_POST['errors']['username'] = 'Incorrect username or password';
+    }
 }
-try {
-    moadminComponent::$model = new moadminModel($_GET['db']);
-} catch(Exception $e) {
-    echo $e;
-    exit(0);
-}
+$isAuthenticated = (!isset($accessControl) || isset($_SESSION['user']));
+
 $html = get::helper('html');
 $ver = explode('.', phpversion());
 get::$isPhp523orNewer = ($ver[0] >= 5 && ($ver[1] > 2 || ($ver[1] == 2 && $ver[2] >= 3)));
 $form = new formHelper;
-$mo = new moadminComponent;
 
-if (isset($_GET['export']) && isset($mo->mongo['listRows'])) {
-    $rows = array();
-    foreach ($mo->mongo['listRows'] as $row) {
-        $rows[] = serialize($row);
+if ($isAuthenticated) {
+    if (!isset($_GET['db'])) {
+        $_GET['db'] = moadminModel::$dbName;
+    } else if (strpos($_GET['db'], '.') !== false) {
+        $_GET['db'] = $_GET['newdb'];
     }
-    $filename = get::htmlentities($_GET['db']);
-    if (isset($_GET['collection'])) {
-        $filename .= '~' . get::htmlentities($_GET['collection']);
+    try {
+        moadminComponent::$model = new moadminModel($_GET['db']);
+    } catch(Exception $e) {
+        echo $e;
+        exit(0);
     }
-    $filename .= '.json';
-    get::helper('json')->echoJson($rows, $filename);
-    exit(0);
+    $mo = new moadminComponent;
+
+    if (isset($_GET['export']) && isset($mo->mongo['listRows'])) {
+        $rows = array();
+        foreach ($mo->mongo['listRows'] as $row) {
+            $rows[] = serialize($row);
+        }
+        $filename = get::htmlentities($_GET['db']);
+        if (isset($_GET['collection'])) {
+            $filename .= '~' . get::htmlentities($_GET['collection']);
+        }
+        $filename .= '.json';
+        get::helper('json')->echoJson($rows, $filename);
+        exit(0);
+    }
 }
 
 /**
@@ -2165,22 +2178,12 @@ echo '<div id="bodycontent" class="ui-widget-content"><h1 style="float: right;">
     . $html->link('http://www.phpmoadmin.com', $phpmoadmin, array('title' => 'phpMoAdmin')) . '</h1>';
 
 if (isset($accessControl) && !isset($_SESSION['user'])) {
-    if (isset($_POST['username'])) {
-        $_POST = array_map('trim', $_POST);
-        if (isset($accessControl[$_POST['username']]) && $accessControl[$_POST['username']] == $_POST['password']) {
-            $_SESSION['user'] = $_POST['username'];
-        } else {
-            $_POST['errors']['username'] = 'Incorrect username or password';
-        }
-    }
-    if (!isset($_SESSION['user'])) {
-        echo $form->open();
-        echo $html->div($form->input(array('name' => 'username', 'focus' => true)));
-        echo $html->div($form->password(array('name' => 'password')));
-        echo $html->div($form->submit(array('value' => 'Login', 'class' => 'ui-state-hover')));
-        echo $form->close();
-        exit(0);
-    }
+    echo $form->open();
+    echo $html->div($form->input(array('name' => 'username', 'focus' => true)));
+    echo $html->div($form->password(array('name' => 'password')));
+    echo $html->div($form->submit(array('value' => 'Login', 'class' => 'ui-state-hover')));
+    echo $form->close();
+    exit(0);
 }
 
 echo '<div id="dbcollnav">';
