@@ -6,7 +6,7 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.1.3
+ * @version 1.1.4
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  * @license GPL v3 - http://vork.us/go/mvz5
  */
