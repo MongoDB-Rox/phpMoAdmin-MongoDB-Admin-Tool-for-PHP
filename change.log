@@ -1,5 +1,6 @@
 Version 1.1.4
 Added pagination option to skip to first/last
+Bugfix: corrected security vulnerabilities
 Bugfix: all stats() results now display correctly
 Bugfix: enabled searching for URI-reserved chars
 Removed GoChat (project no longer active)
