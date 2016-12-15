@@ -1,3 +1,8 @@
+Version 1.1.4
+Bugfix: all stats() results now display correctly
+Bugfix: enabled searching for URI-reserved chars
+Removed GoChat (project no longer active)
+
 Version 1.1.3
 Added support for MongoClient connection manager
 Made phpMoAdmin SSL-friendly
