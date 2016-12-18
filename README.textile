@@ -9,29 +9,37 @@ h3. Built on a stripped-down version of the high-performance Vork Enterprise Fra
     * *Nothing to configure* - place the moadmin.php file anywhere on your web site and *it just works!*
     * Fast *AJAX-driven XHTML 1.1* interface operates consistently in every browser!
     * *Self-contained in a single 110kb file!*
-    * Works on any version of PHP5 with the MongoDB NoSQL database & Mongo PHP driver installed and running.
+    * Works on any version of PHP5 or PHP7 with the MongoDB NoSQL database & Mongo PHP driver installed and running.
     * Instructional error messages - *phpMoAdmin can be used as a PHP-Mongo connection debugging tool*
-    * Super flexible - search for:
+    * Option to query MongoDB using JSON syntax or a PHP-array
+    * Super flexible search tool - you can search for:
         + exact-text
-        + (type-casted) value
+        + (type-casted) values
         + text with * wildcards
         + Regular Expressions (regex)
         + JSON (with Mongo-operators enabled)
     * Import/export data in JSON format
-        + Export full collections or limit recordset to the results of a query
-            - Option to export exact page contents or entire query results (ignoring limit and skip values)
+        + Export full collections or a recordset limited to the results of a query
+            - Option to export entire query results (ignoring any limit or skip values) or just the contents of the current page
         + Import can specify:
             - Insert new records only
-            - Save / upsert (adds new & overwrites existing with same _id)
-            - Update only pre-existing records
-            - Insert until a duplicate is found and then halt import
-    * Option to enable password-protection for one or more users
-        + To activate protection, just add the username-password(s) to the array at the top of the file.
+            - Save / upsert (adds new records, overwrites existing records that have the same _id key)
+            - Update only pre-existing records (skips any new records)
+            - Insert until a duplicate record is found and then halt import
+    * Option to enable password-protection for one or more users - to activate protection:
+        + Uncomment the *$accessControl* array at the top of the file on *line 18*
+        + Change the default username (*scott*) & password (*tiger*)
+        + (optional) Add additional sets of username-password(s) to the array
     * E_STRICT PHP code is formatted to the Zend Framework coding standards
         + Fully-documented in the phpDocumentor DocBlock standard.
-    * Textareas can be resized by dragging/stretching the lower-right corner
-    * Option to query MongoDB using JSON or a PHP-array syntax
+    * All form textareas can be resized by dragging/stretching the lower-right corner
     * Multiple design themes to choose from
+        + change themes easily by setting the *THEME* constant-variable on *line 29* to one of the following:
+            - swanky-purse
+            - trontastic
+            - simple-gray
+            - classic
+    * "Stats" tool displays helpful data including version numbers and configuration settings for PHP, MongoDB and the Mongo-PHP driver
     * *Free & open-source!* Released under the GPLv3 FOSS license!
 
 "www.phpMoAdmin.com":http://www.phpMoAdmin.com
@@ -66,20 +74,20 @@ h2. Features
                 - ascending/descending
                 - unique index
     * Data objects
-          o Search for exact-text, (type-casted) value, text with * wildcards, regex or JSON (with Mongo-operators enabled)
+          o Search for exact-text, (type-casted) values, text with * wildcards, regex or JSON (with Mongo-operators enabled)
           o Show objects with 3-different viewing options (full, compact & uniform)
-          o Option to query MongoDB using JSON or a PHP array
+          o Option to query MongoDB using JSON syntax or a PHP array
           o Sort by any key within your data object (even nested sub-keys!) with ascending/descending option
                 - Option to sort by $natural for rapid browsing of large datasets
           o Create/delete objects
           o Edit object data using standard PHP object/array syntax
           o Export to JSON format
                 - Full collections or limited recordset based on the results of a query
-                - Export exact page contents or entire query results (ignoring limit and skip values)
+                - Export exact current results-page contents or the entire query results (ignoring any limit or skip values)
           o Import from JSON format
                 - Insert new records only
-                - Save / upsert (adds new & overwrites existing with same _id)
-                - Update only pre-existing records
+                - Save / upsert (adds new records, and overwrites existing records with same _id)
+                - Update only pre-existing records (ignores new records)
                 - Insert until a duplicate is found and then halt import
     * Mongo GridFS
           o GridFS objects automatically link GridFS chunks to GridFS files
@@ -87,7 +95,7 @@ h2. Features
           o Uptime, memory, etc.
           o Log of previous errors
           o Mongo-PHP settings
-          o Version & bit-depth of MongoDB, Mongo PHP driver, phpMoAdmin, etc.
+          o Version & bit-depth of PHP, MongoDB, Mongo PHP driver, phpMoAdmin, etc.
     * Optional password-protection for one or more users
 
 h2. Themes
