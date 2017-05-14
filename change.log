@@ -1,4 +1,5 @@
 Version 1.1.5
+Bugfix: stats() now works correctly on Windows
 Bugfix: removed usage of escapeshellarg() (added in 1.1.4) as it was causing queries to fail in certain situations
 
 Version 1.1.4
