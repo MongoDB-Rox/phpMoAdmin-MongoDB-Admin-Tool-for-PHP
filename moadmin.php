@@ -386,8 +386,10 @@ class moadminModel {
      */
     public function getStats() {
         $admin = $this->_db->selectDB('admin');
-        $return = array_merge($admin->command(array('buildinfo' => 1)),
-                              $admin->command(array('serverStatus' => 1)));
+        $return = $admin->command(array('buildinfo' => 1));
+        try {
+            $return = array_merge($return, $admin->command(array('serverStatus' => 1)));
+        } catch (MongoCursorException $e) {}
         $profile = $admin->command(array('profile' => -1));
         $return['profilingLevel'] = $profile['was'];
         $return['mongoDbTotalSize'] = round($this->totalDbSize / 1000000) . 'mb';
@@ -398,9 +400,13 @@ class moadminModel {
             $return['previousDbErrors']['error'] = $prevError['err'];
             $return['previousDbErrors']['numberOfOperationsAgo'] = $prevError['nPrev'];
         }
-        $return['globalLock']['totalTime'] .= ' &#0181;Sec';
-        $return['uptime'] = round($return['uptime'] / 60) . ':' . str_pad($return['uptime'] % 60, 2, '0', STR_PAD_LEFT)
-                          . ' minutes';
+        if (isset($return['globalLock']['totalTime'])) {
+            $return['globalLock']['totalTime'] .= ' &#0181;Sec';
+        }
+        if (isset($return['uptime'])) {
+            $return['uptime'] = round($return['uptime'] / 60) . ':' . str_pad($return['uptime'] % 60, 2, '0', STR_PAD_LEFT)
+                              . ' minutes';
+        }
         $unshift['mongo'] = $return['version'] . ' (' . $return['bits'] . '-bit)';
         $unshift['mongoPhpDriver'] = Mongo::VERSION;
         $unshift['phpMoAdmin'] = '1.1.4';
