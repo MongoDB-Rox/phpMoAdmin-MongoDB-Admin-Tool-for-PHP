@@ -6,7 +6,7 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.1.4
+ * @version 1.1.5
  * @author Eric David Benari, Chief Architect, phpMoAdmin
  * @license GPL v3 - http://vork.us/go/mvz5
  */
@@ -553,7 +553,7 @@ class moadminModel {
         if (isset($_GET['find']) && $_GET['find']) {
             $_GET['find'] = trim($_GET['find']);
             if (strpos($_GET['find'], 'array') === 0) {
-                eval('$find = ' . escapeshellarg($_GET['find']) . ';');
+                eval('$find = ' . $_GET['find'] . ';');
             } else if (is_string($_GET['find'])) {
                 if ($findArr = json_decode($_GET['find'], true)) {
                     $find = $findArr;
@@ -691,7 +691,7 @@ class moadminModel {
      * @return array
      */
     public function saveObject($collection, $obj) {
-        eval('$obj=' . escapeshellarg($obj) . ';'); //cast from string to array
+        eval('$obj=' . $obj . ';'); //cast from string to array
         return $this->mongo->selectCollection($collection)->save($obj);
     }
 
