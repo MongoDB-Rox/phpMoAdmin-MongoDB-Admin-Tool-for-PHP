@@ -63,7 +63,6 @@ h2. Features
     * Database
           ** List with data sizes
           ** Create/drop
-          ** Repair
     * Collection
           ** Show collections
           ** Create/drop collection
