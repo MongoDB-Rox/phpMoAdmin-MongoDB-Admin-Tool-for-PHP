@@ -8,7 +8,7 @@ h3. Built on a stripped-down version of the high-performance Vork Enterprise Fra
 
     * *Nothing to configure* - place the moadmin.php file anywhere on your web site and *it just works!*
     * Fast *AJAX-driven XHTML 1.1* interface operates consistently in every browser!
-    * *Self-contained in a single 110kb file!*
+    * *Self-contained in a single 120kb file!*
     * Works on any version of PHP5 or PHP7 with the MongoDB NoSQL database & Mongo PHP driver installed and running.
     * Instructional error messages - *phpMoAdmin can be used as a PHP-Mongo connection debugging tool*
     * Option to query MongoDB using JSON syntax or a PHP-array
