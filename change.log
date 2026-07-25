@@ -1,3 +1,8 @@
+Version 2.0.0
+Updated code for PHP8 and Mongo 8.3
+Removed repair option, it is no longer supported
+Minor bugfixes and UI improvements
+
 Version 1.1.5
 Bugfix: stats() now works correctly on Windows
 Bugfix: removed usage of escapeshellarg() (added in 1.1.4) as it was causing queries to fail in certain situations
