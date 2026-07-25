@@ -6,9 +6,9 @@
  * www.Vork.us
  * www.MongoDB.org
  *
- * @version 1.1.5
+ * @version 2.0.0
  * @author Eric David Benari, Chief Architect, phpMoAdmin
- * @license GPL v3 - https://www.gnu.org/licenses/gpl-3.0.en.html
+ * @license GPL v3
  */
 
 /**
@@ -149,7 +149,7 @@ class get {
             unset($chars['<'], $chars['>']);
             $charMaps[$quoteStyle]['ISO-8859-1'][true] = $chars;
             $charMaps[$quoteStyle]['ISO-8859-1'][false] = array_combine(array_values($chars), $chars);
-            $charMaps[$quoteStyle]['UTF-8'][true] = array_combine(array_map('utf8_encode', array_keys($chars)), $chars);
+            $charMaps[$quoteStyle]['UTF-8'][true] = array_combine(array_map(fn($k) => mb_convert_encoding($k, 'UTF-8', 'ISO-8859-1'), array_keys($chars)), $chars);
             $charMaps[$quoteStyle]['UTF-8'][false] = array_merge($charMaps[$quoteStyle]['ISO-8859-1'][false],
                                                                  $charMaps[$quoteStyle]['UTF-8'][true]);
             self::$loadedObjects['xhtmlEntities'] = $charMaps;
@@ -267,12 +267,148 @@ class mongoExtensionNotInstalled extends Exception {
 }
 
 /**
+ * Lazy cursor wrapper for the PHP8 MongoDB driver
+ */
+class moaCursor implements \IteratorAggregate {
+    private \MongoDB\Driver\Manager $manager;
+    private string $namespace;
+    private array $filter;
+    private array $options;
+    private ?array $results = null;
+    private int $position = 0;
+
+    public function __construct(\MongoDB\Driver\Manager $manager, string $namespace, array $filter = [], array $fields = []) {
+        $this->manager   = $manager;
+        $this->namespace = $namespace;
+        $this->filter    = $filter;
+        $this->options   = $fields ? ['projection' => $fields] : [];
+    }
+
+    public function sort(array $sort): static { $this->options['sort'] = $sort; return $this; }
+    public function limit(int $n): static { $this->options['limit'] = $n; return $this; }
+    public function skip(int $n): static { $this->options['skip'] = $n; return $this; }
+
+    private function fetch(): array {
+        if ($this->results === null) {
+            $cursor = $this->manager->executeQuery($this->namespace, new \MongoDB\Driver\Query($this->filter, $this->options));
+            $cursor->setTypeMap(['root' => 'array', 'document' => 'array', 'array' => 'array']);
+            $this->results = $cursor->toArray();
+        }
+        return $this->results;
+    }
+
+    public function count(bool $applyLimit = false): int {
+        if ($applyLimit) {
+            return count($this->fetch());
+        }
+        [$db, $col] = explode('.', $this->namespace, 2);
+        $result = $this->manager->executeCommand($db, new \MongoDB\Driver\Command(['count' => $col, 'query' => (object) $this->filter]))->toArray()[0];
+        return (int) $result->n;
+    }
+
+    public function getNext(): ?array {
+        $results = $this->fetch();
+        return $results[$this->position++] ?? null;
+    }
+
+    public function toArray(): array { return $this->fetch(); }
+    public function getIterator(): \ArrayIterator { return new \ArrayIterator($this->fetch()); }
+}
+
+/**
+ * Collection wrapper for the PHP8 MongoDB driver
+ */
+class moaCollection {
+    private \MongoDB\Driver\Manager $manager;
+    private string $namespace;
+    private string $dbName;
+    private string $collName;
+
+    public function __construct(\MongoDB\Driver\Manager $manager, string $dbName, string $collName) {
+        $this->manager   = $manager;
+        $this->dbName    = $dbName;
+        $this->collName  = $collName;
+        $this->namespace = $dbName . '.' . $collName;
+    }
+
+    public function find(array $filter = [], array $fields = []): moaCursor {
+        return new moaCursor($this->manager, $this->namespace, $filter, $fields);
+    }
+
+    public function findOne(array $filter = [], array $fields = []): ?array {
+        $opts   = $fields ? ['projection' => $fields, 'limit' => 1] : ['limit' => 1];
+        $cursor = $this->manager->executeQuery($this->namespace, new \MongoDB\Driver\Query($filter, $opts));
+        $cursor->setTypeMap(['root' => 'array', 'document' => 'array', 'array' => 'array']);
+        $results = $cursor->toArray();
+        return $results[0] ?? null;
+    }
+
+    public function count(array $filter = []): int {
+        $result = $this->manager->executeCommand($this->dbName, new \MongoDB\Driver\Command(['count' => $this->collName, 'query' => (object) $filter]))->toArray()[0];
+        return (int) $result->n;
+    }
+
+    public function save(array|object $document): bool {
+        $doc  = (array) $document;
+        $bulk = new \MongoDB\Driver\BulkWrite();
+        isset($doc['_id']) ? $bulk->update(['_id' => $doc['_id']], $doc, ['upsert' => true]) : $bulk->insert($doc);
+        $r = $this->manager->executeBulkWrite($this->namespace, $bulk);
+        return ($r->getInsertedCount() + $r->getModifiedCount() + $r->getUpsertedCount()) > 0;
+    }
+
+    public function insert(array|object $document): bool {
+        $bulk = new \MongoDB\Driver\BulkWrite();
+        $bulk->insert((array) $document);
+        return $this->manager->executeBulkWrite($this->namespace, $bulk)->getInsertedCount() > 0;
+    }
+
+    public function remove(array $filter, array $options = []): bool {
+        $bulk = new \MongoDB\Driver\BulkWrite();
+        $bulk->delete($filter, ['limit' => empty($options['justOne']) ? 0 : 1]);
+        return $this->manager->executeBulkWrite($this->namespace, $bulk)->getDeletedCount() > 0;
+    }
+
+    public function update(array $filter, array $update, array $options = []): bool {
+        $bulk = new \MongoDB\Driver\BulkWrite();
+        $bulk->update($filter, $update, ['upsert' => $options['upsert'] ?? false, 'multi' => $options['multiple'] ?? $options['multi'] ?? false]);
+        $r = $this->manager->executeBulkWrite($this->namespace, $bulk);
+        return ($r->getModifiedCount() + $r->getUpsertedCount()) > 0;
+    }
+
+    public function batchInsert(array $documents): bool {
+        $bulk = new \MongoDB\Driver\BulkWrite();
+        foreach ($documents as $doc) { $bulk->insert((array) $doc); }
+        return $this->manager->executeBulkWrite($this->namespace, $bulk)->getInsertedCount() > 0;
+    }
+
+    public function drop(): void {
+        $this->manager->executeCommand($this->dbName, new \MongoDB\Driver\Command(['drop' => $this->collName]));
+    }
+}
+
+/**
+ * Database wrapper for the PHP8 MongoDB driver
+ */
+class moaDB {
+    public \MongoDB\Driver\Manager $manager;
+    public string $dbName;
+
+    public function __construct(\MongoDB\Driver\Manager $manager, string $dbName) {
+        $this->manager = $manager;
+        $this->dbName  = $dbName;
+    }
+
+    public function selectCollection(string $name): moaCollection {
+        return new moaCollection($this->manager, $this->dbName, $name);
+    }
+}
+
+/**
  * phpMoAdmin data model
  */
 class moadminModel {
     /**
-     * mongo connection - if a MongoDB object already exists (from a previous script) then only DB operations use this
-     * @var Mongo
+     * @var MongoDB\Driver\Manager
      */
     protected $_db;
 
@@ -283,19 +419,33 @@ class moadminModel {
     public static $dbName = 'admin';
 
     /**
-     * MongoDB
-     * @var MongoDB
+     * @var moaDB
      */
     public $mongo;
 
     /**
-     * Returns a new Mongo connection
-     * @return Mongo
+     * Reverts unintended behavior of escapeshellarg() that wraps quotes around string in Windows environments only
+     *
+     * @param string $arg
+     * @return string
+     */
+    protected function _escapeshellarg($obj) {
+        $safeObj = escapeshellarg($obj);
+        if (substr($safeObj, 0, 1) == '"' && substr($safeObj, -1) == '"') { //Windows
+            $safeObj = substr($safeObj, 1, -1);
+        } else if (substr($safeObj, 0, 1) == "'" && substr($safeObj, -1) == "'") { //Linux
+            $safeObj = str_replace("'\\''", "'", substr($safeObj, 1, -1));
+        }
+        return $safeObj;
+    }
+
+    /**
+     * Returns a new MongoDB\Driver\Manager connection
      */
     protected function _mongo() {
         $connection = (!MONGO_CONNECTION ? 'mongodb://localhost:27017' : MONGO_CONNECTION);
-        $Mongo = (class_exists('MongoClient') === true ? 'MongoClient' : 'Mongo');
-        return (!REPLICA_SET ? new $Mongo($connection) : new $Mongo($connection, array('replicaSet' => true)));
+        $options    = REPLICA_SET ? ['replicaSet' => true] : [];
+        return new \MongoDB\Driver\Manager($connection, $options);
     }
 
     /**
@@ -307,27 +457,24 @@ class moadminModel {
             $db = self::$dbName = $_GET['db'] = current(self::$databaseWhitelist);
         }
         if ($db) {
-            if (!extension_loaded('mongo')) {
+            if (!extension_loaded('mongodb')) {
                 throw new mongoExtensionNotInstalled();
             }
             try {
-                $this->_db = $this->_mongo();
-                $this->mongo = $this->_db->selectDB($db);
-            } catch (MongoConnectionException $e) {
+                $this->_db   = $this->_mongo();
+                $this->mongo = new moaDB($this->_db, $db);
+                self::$dbName = $db;
+            } catch (\MongoDB\Driver\Exception\ConnectionTimeoutException $e) {
                 throw new cannotConnectToMongoServer();
             }
         }
     }
 
     /**
-     * Executes a native JS MongoDB command
-     * This method is not currently used for anything
-     * @param string $cmd
-     * @return mixed
+     * execute() was removed in MongoDB 4.2 — unused
      */
     protected function _exec($cmd) {
-        $exec = $this->mongo->execute($cmd);
-        return $exec['retval'];
+        return null;
     }
 
     /**
@@ -341,7 +488,7 @@ class moadminModel {
         if (!isset($this->_db)) {
             $this->_db = $this->_mongo();
         }
-        $this->mongo = $this->_db->selectDB($db);
+        $this->mongo  = new moaDB($this->_db, $db);
         self::$dbName = $db;
     }
 
@@ -364,12 +511,15 @@ class moadminModel {
     public function listDbs() {
         $return = array();
         $restrictDbs = (bool) self::$databaseWhitelist;
-        $dbs = $this->_db->selectDB('admin')->command(array('listDatabases' => 1));
-        $this->totalDbSize = $dbs['totalSize'];
-        foreach ($dbs['databases'] as $db) {
+        $cursor = $this->_db->executeCommand('admin', new \MongoDB\Driver\Command(['listDatabases' => 1]));
+        $cursor->setTypeMap(['root' => 'array', 'document' => 'array', 'array' => 'array']);
+        $result = $cursor->toArray()[0];
+        $this->totalDbSize = $result['totalSize'];
+        foreach ($result['databases'] as $db) {
             if (!$restrictDbs || in_array($db['name'], self::$databaseWhitelist)) {
-                $return[$db['name']] = $db['name'] . ' ('
-                                     . (!$db['empty'] ? round($db['sizeOnDisk'] / 1000000) . 'mb' : 'empty') . ')';
+                $size = $db['sizeOnDisk'] ?? 0;
+                $sizeStr = $size >= 1048576 ? round($size / 1048576) . 'mb' : round($size / 1024) . 'kb';
+                $return[$db['name']] = $db['name'] . ' (' . (!$db['empty'] ? $sizeStr : 'empty') . ')';
             }
         }
         ksort($return);
@@ -385,45 +535,28 @@ class moadminModel {
      * @return array
      */
     public function getStats() {
-        $admin = $this->_db->selectDB('admin');
-        $return = $admin->command(array('buildinfo' => 1));
-        try {
-            $return = array_merge($return, $admin->command(array('serverStatus' => 1)));
-        } catch (MongoCursorException $e) {}
-        $profile = $admin->command(array('profile' => -1));
+        $adminCmd = function($cmd) {
+            $cursor = $this->_db->executeCommand('admin', new \MongoDB\Driver\Command($cmd));
+            $cursor->setTypeMap(['root' => 'array', 'document' => 'array', 'array' => 'array']);
+            return $cursor->toArray()[0];
+        };
+        $return = array_merge($adminCmd(['buildInfo' => 1]), $adminCmd(['serverStatus' => 1]));
+        $profile = $adminCmd(['profile' => -1]);
         $return['profilingLevel'] = $profile['was'];
         $return['mongoDbTotalSize'] = round($this->totalDbSize / 1000000) . 'mb';
-        $prevError = $admin->command(array('getpreverror' => 1));
-        if (!$prevError['n']) {
-            $return['previousDbErrors'] = 'None';
-        } else {
-            $return['previousDbErrors']['error'] = $prevError['err'];
-            $return['previousDbErrors']['numberOfOperationsAgo'] = $prevError['nPrev'];
-        }
+        $return['previousDbErrors'] = 'None';
         if (isset($return['globalLock']['totalTime'])) {
             $return['globalLock']['totalTime'] .= ' &#0181;Sec';
         }
-        if (isset($return['uptime'])) {
-            $return['uptime'] = round($return['uptime'] / 60) . ':' . str_pad($return['uptime'] % 60, 2, '0', STR_PAD_LEFT)
-                              . ' minutes';
-        }
-        $unshift['mongo'] = $return['version'] . ' (' . $return['bits'] . '-bit)';
-        $unshift['mongoPhpDriver'] = Mongo::VERSION;
-        $unshift['phpMoAdmin'] = '1.1.4';
+        $return['uptime'] = round($return['uptime'] / 60) . ':' . str_pad($return['uptime'] % 60, 2, '0', STR_PAD_LEFT)
+                          . ' minutes';
+        $unshift['mongo'] = $return['version'] . ' (' . ($return['bits'] ?? '64') . '-bit)';
+        $unshift['mongoPhpDriver'] = phpversion('mongodb');
+        $unshift['phpMoAdmin'] = '2.0.0';
         $unshift['php'] = PHP_VERSION . ' (' . (PHP_INT_MAX > 2200000000 ? 64 : 32) . '-bit)';
         $unshift['gitVersion'] = $return['gitVersion'];
         unset($return['ok'], $return['version'], $return['gitVersion'], $return['bits']);
         $return = array_merge(array('version' => $unshift), $return);
-        $iniIndex = array(-1 => 'Unlimited', 'Off', 'On');
-        $phpIni = array('allow_persistent', 'auto_reconnect', 'chunk_size', 'cmd', 'default_host', 'default_port',
-                        'max_connections', 'max_persistent');
-        foreach ($phpIni as $ini) {
-            $key = 'php_' . $ini;
-            $return[$key] = ini_get('mongo.' . $ini);
-            if (isset($iniIndex[$return[$key]])) {
-                $return[$key] = $iniIndex[$return[$key]];
-            }
-        }
         return $return;
     }
 
@@ -431,20 +564,11 @@ class moadminModel {
      * Repairs a database
      * @return array Success status
      */
-    public function repairDb() {
-        return $this->mongo->repair();
-    }
-
     /**
      * Drops a database
      */
     public function dropDb() {
-        $this->mongo->drop();
-        return;
-        if (!isset($this->_db)) {
-            $this->_db = $this->_mongo();
-        }
-        $this->_db->dropDB($this->mongo);
+        $this->_db->executeCommand(self::$dbName, new \MongoDB\Driver\Command(['dropDatabase' => 1]));
     }
 
     /**
@@ -453,10 +577,12 @@ class moadminModel {
      */
     public function listCollections() {
         $collections = array();
-        $MongoCollectionObjects = $this->mongo->listCollections();
-        foreach ($MongoCollectionObjects as $collection) {
-            $collection = substr(strstr((string) $collection, '.'), 1);
-            $collections[$collection] = $this->mongo->selectCollection($collection)->count();
+        $cursor = $this->_db->executeCommand(self::$dbName, new \MongoDB\Driver\Command(['listCollections' => 1]));
+        $cursor->setTypeMap(['root' => 'array', 'document' => 'array', 'array' => 'array']);
+        foreach ($cursor->toArray() as $col) {
+            $name = $col['name'];
+            $countResult = $this->_db->executeCommand(self::$dbName, new \MongoDB\Driver\Command(['count' => $name]))->toArray()[0];
+            $collections[$name] = (int) $countResult->n;
         }
         ksort($collections);
         return $collections;
@@ -467,7 +593,7 @@ class moadminModel {
      * @param string $collection
      */
     public function dropCollection($collection) {
-        $this->mongo->selectCollection($collection)->drop();
+        $this->_db->executeCommand(self::$dbName, new \MongoDB\Driver\Command(['drop' => $collection]));
     }
 
     /**
@@ -476,7 +602,11 @@ class moadminModel {
      */
     public function createCollection($collection) {
         if ($collection) {
-            $this->mongo->createCollection($collection);
+            try {
+                $this->_db->executeCommand(self::$dbName, new \MongoDB\Driver\Command(['create' => $collection]));
+            } catch (\MongoDB\Driver\Exception\CommandException $e) {
+                if ($e->getCode() !== 48) { throw $e; } // 48 = NamespaceExists
+            }
         }
     }
 
@@ -487,10 +617,10 @@ class moadminModel {
      * @param string $to
      */
     public function renameCollection($from, $to) {
-        $result = $this->_db->selectDB('admin')->command(array(
+        $this->_db->executeCommand('admin', new \MongoDB\Driver\Command([
             'renameCollection' => self::$dbName . '.' . $from,
-            'to' => self::$dbName . '.' . $to,
-        ));
+            'to'               => self::$dbName . '.' . $to,
+        ]));
     }
 
     /**
@@ -500,7 +630,9 @@ class moadminModel {
      * @return array
      */
     public function listIndexes($collection) {
-        return $this->mongo->selectCollection($collection)->getIndexInfo();
+        $cursor = $this->_db->executeCommand(self::$dbName, new \MongoDB\Driver\Command(['listIndexes' => $collection]));
+        $cursor->setTypeMap(['root' => 'array', 'document' => 'array', 'array' => 'array']);
+        return $cursor->toArray();
     }
 
     /**
@@ -511,8 +643,11 @@ class moadminModel {
      * @param array $unique
      */
     public function ensureIndex($collection, array $indexes, array $unique) {
-        $unique = ($unique ? true : false); //signature requires a bool in both Mongo v. 1.0.1 and 1.2.0
-        $this->mongo->selectCollection($collection)->ensureIndex($indexes, $unique);
+        $isUnique  = !empty($unique['unique']);
+        $indexName = implode('_', array_map(fn($k, $v) => $k . '_' . $v, array_keys($indexes), $indexes));
+        $indexDoc  = ['key' => $indexes, 'name' => $indexName];
+        if ($isUnique) { $indexDoc['unique'] = true; }
+        $this->_db->executeCommand(self::$dbName, new \MongoDB\Driver\Command(['createIndexes' => $collection, 'indexes' => [$indexDoc]]));
     }
 
     /**
@@ -522,7 +657,7 @@ class moadminModel {
      * @param array $index Must match the array signature of the index
      */
     public function deleteIndex($collection, array $index) {
-        $this->mongo->selectCollection($collection)->deleteIndex($index);
+        $this->_db->executeCommand(self::$dbName, new \MongoDB\Driver\Command(['dropIndexes' => $collection, 'index' => $index]));
     }
 
     /**
@@ -559,7 +694,7 @@ class moadminModel {
         if (isset($_GET['find']) && $_GET['find']) {
             $_GET['find'] = trim($_GET['find']);
             if (strpos($_GET['find'], 'array') === 0) {
-                eval('$find = ' . $_GET['find'] . ';');
+                eval('$find = ' . $this->_escapeshellarg($_GET['find']) . ';');
             } else if (is_string($_GET['find'])) {
                 if ($findArr = json_decode($_GET['find'], true)) {
                     $find = $findArr;
@@ -569,7 +704,8 @@ class moadminModel {
         if (isset($_GET['search']) && $_GET['search']) {
             switch (substr(trim($_GET['search']), 0, 1)) { //first character
                 case '/': //regex
-                    $find[$_GET['searchField']] = new mongoRegex($_GET['search']);
+                    preg_match('/^\/(.*)\/([a-z]*)$/s', $_GET['search'], $rxm);
+                    $find[$_GET['searchField']] = new \MongoDB\BSON\Regex($rxm[1], $rxm[2] ?? '');
                     break;
                 case '{': //JSON
                     if ($search = json_decode($_GET['search'], true)) {
@@ -585,7 +721,7 @@ class moadminModel {
                         if (in_array($cast, $types)) {
                             $search = trim(substr($_GET['search'], ($closeParentheses + 1)));
                             if ($cast == 'mongoid') {
-                                $search = new MongoID($search);
+                                $search = new \MongoDB\BSON\ObjectId($search);
                             } else {
                                 settype($search, $cast);
                             }
@@ -602,8 +738,7 @@ class moadminModel {
                             $find[$_GET['searchField']] = array('$in' => $in);
                         }
                     } else { //text with wildcards
-                        $regex = '/' . str_replace('\*', '.*', preg_quote($_GET['search'])) . '/i';
-                        $find[$_GET['searchField']] = new mongoRegex($regex);
+                        $find[$_GET['searchField']] = new \MongoDB\BSON\Regex(str_replace('\*', '.*', preg_quote($_GET['search'])), 'i');
                     }
                     break;
             }
@@ -652,7 +787,9 @@ class moadminModel {
      * @return mixed
      */
     protected function _unserialize($_id, $idtype) {
-        if ($idtype == 'object' || $idtype == 'array') {
+        if ($idtype == 'mongoid') {
+            return new \MongoDB\BSON\ObjectId($_id);
+        } else if ($idtype == 'object' || $idtype == 'array') {
             $errLevel = error_reporting();
             error_reporting(0); //unserializing an object that is not serialized throws a warning
             $_idObj = unserialize($_id);
@@ -697,7 +834,7 @@ class moadminModel {
      * @return array
      */
     public function saveObject($collection, $obj) {
-        eval('$obj=' . $obj . ';'); //cast from string to array
+        eval('$obj=' . $this->_escapeshellarg($obj) . ';'); //cast from string to array
         return $this->mongo->selectCollection($collection)->save($obj);
     }
 
@@ -831,7 +968,7 @@ class moadminComponent {
         } else if ($action == 'getStats') {
             $this->mongo[$action] = self::$model->$action();
             unset($this->mongo['listCollections']);
-        } else if ($action == 'repairDb' || $action == 'getStats') {
+        } else if ($action == 'getStats') {
             $this->mongo[$action] = self::$model->$action();
             $action = 'listCollections';
         } else if ($action == 'dropDb') {
@@ -1983,7 +2120,7 @@ class phpMoAdmin {
  * phpMoAdmin bootstrap
  */
 session_start();
-if (get_magic_quotes_gpc()) {
+if (function_exists('get_magic_quotes_gpc') && get_magic_quotes_gpc()) {
     $_GET = phpMoAdmin::stripslashes($_GET);
     $_POST = phpMoAdmin::stripslashes($_POST);
 }
@@ -2074,6 +2211,7 @@ textarea {width: 640px; height: 70px;}
 a, .textLink {text-decoration: none; color: #96f226; font-weight: bold;}
 a:hover, .textLink:hover {text-decoration: underline; color: #9fda58;}
 a:hover pre, h1 a:hover {text-decoration: none;}
+a.navlink {text-decoration: underline; margin-right: 5px;} a.navlink:hover {text-decoration: none;}
 h1, h2, h3, h4 {margin-bottom: 3px;}
 h1, h2 {margin-left: -1px;}
 h1 {font-family: "Arial Black"; font-size: 27px; color: #b8ec79;}
@@ -2193,18 +2331,12 @@ if (isset($accessControl) && !isset($_SESSION['user'])) {
 }
 
 echo '<div id="dbcollnav">';
-$formArgs = array('method' => 'get');
-if (isset($mo->mongo['repairDb'])) {
-    $formArgs['alert'] = (isset($mo->mongo['repairDb']['ok']) && $mo->mongo['repairDb']['ok']
-                          ? 'Database has been repaired and compacted' : 'Database could not be repaired');
-}
-echo $form->open($formArgs);
+echo $form->open(array('method' => 'get'));
 echo $html->div($form->select(array('name' => 'db', 'options' => $mo->mongo['dbs'], 'label' => '', 'value' => $db,
                                        'addBreak' => false))
               . $form->submit(array('value' => 'Change database', 'class' => 'ui-state-hover'))
               . ' <span style="font-size: xx-large;">' . get::htmlentities($db)
-              . '</span> [' . $html->link("javascript: mo.repairDatabase('" . get::htmlentities($db)
-              . "'); void(0);", 'repair database') . '] [' . $html->link("javascript: mo.dropDatabase('"
+              . '</span> [' . $html->link("javascript: mo.dropDatabase('"
               . get::htmlentities($db) . "'); void(0);", 'drop database') . ']');
 echo $form->close();
 
@@ -2212,11 +2344,6 @@ $js = 'var mo = {}
 mo.urlEncode = function(str) {
     return escape(str)'
         . '.replace(/\+/g, "%2B").replace(/%20/g, "+").replace(/\*/g, "%2A").replace(/\//g, "%2F").replace(/@/g, "%40");
-}
-mo.repairDatabase = function(db) {
-    mo.confirm("Are you sure that you want to repair and compact the " + db + " database?", function() {
-        window.location.replace("' . $baseUrl . '?db=' . $dbUrl . '&action=repairDb");
-    });
 }
 mo.dropDatabase = function(db) {
     mo.confirm("Are you sure that you want to drop the " + db + " database?", function() {
@@ -2450,16 +2577,16 @@ mo.submitQuery = function() {
 
     echo '<div id="mongo_rows">';
     echo $form->open(array('method' => 'get', 'onsubmit' => 'mo.submitSearch(); return false;'));
-    echo '[' . $html->link($baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection) . '&action=editObject',
-                          'insert new object') . '] ';
+    echo $html->link($baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection) . '&action=editObject',
+                          '<strong>+</strong> insert new object', array('class' => 'navlink')) . ' ';
     if (isset($index)) {
         $jsShowIndexes = "javascript: $('#indexeslink').hide(); $('#indexes').show(); void(0);";
-        echo $html->link($jsShowIndexes, '[show indexes]', array('id' => 'indexeslink')) . ' ';
+        echo $html->link($jsShowIndexes, '<strong>#</strong> show indexes', array('id' => 'indexeslink', 'class' => 'navlink')) . ' ';
     }
     $jsShowExport = "javascript: $('#exportlink').hide(); $('#export').show(); void(0);";
-    echo $html->link($jsShowExport, '[export]', array('id' => 'exportlink')) . ' ';
+    echo $html->link($jsShowExport, '<strong>^</strong> export', array('id' => 'exportlink', 'class' => 'navlink')) . ' ';
     $jsShowImport = "javascript: $('#importlink').hide(); $('#import').show(); void(0);";
-    echo $html->link($jsShowImport, '[import]', array('id' => 'importlink')) . ' ';
+    echo $html->link($jsShowImport, '<strong>v</strong> import', array('id' => 'importlink', 'class' => 'navlink')) . ' ';
 
     $linkSubmitArgs = array('class' => 'ui-state-hover', 'style' => 'padding: 3px 8px 3px 8px;');
     $inlineFormArgs = array('label' => '', 'addBreak' => false);
@@ -2475,7 +2602,7 @@ mo.submitQuery = function() {
                     . $html->link("javascript: mo.submitSort(); void(0);", 'Sort', $linkSubmitArgs);
         if (!isset($_GET['sort']) || !$_GET['sort']) {
             $jsLink = "javascript: $('#sortlink').hide(); $('#sortform').show(); void(0);";
-            $formInputs = $html->link($jsLink, '[sort]', array('id' => 'sortlink')) . ' '
+            $formInputs = $html->link($jsLink, '<strong>=</strong> sort', array('id' => 'sortlink', 'class' => 'navlink')) . ' '
                         . '<div id="sortform" style="display: none;">' . $formInputs . '</div>';
         } else {
             $formInputs = $html->div($formInputs);
@@ -2494,7 +2621,7 @@ mo.submitQuery = function() {
                     . $html->link("javascript: mo.submitSearch(); void(0);", 'Search', $linkSubmitArgs);
         if (!isset($_GET['search']) || !$_GET['search']) {
             $jsLink = "javascript: $('#searchlink').hide(); $('#searchform').show(); void(0);";
-            $formInputs = $html->link($jsLink, '[search]', array('id' => 'searchlink')) . ' '
+            $formInputs = $html->link($jsLink, '<strong>?</strong> search', array('id' => 'searchlink', 'class' => 'navlink')) . ' '
                         . '<div id="searchform" style="display: none;">' . $formInputs . '</div>';
         } else {
             $formInputs = $html->div($formInputs);
@@ -2509,7 +2636,7 @@ mo.submitQuery = function() {
                 . $html->link("javascript: mo.submitQuery(); void(0);", 'Query', $linkSubmitArgs);
     if (!isset($_GET['find']) || !$_GET['find']) {
         $jsLink = "javascript: $('#querylink').hide(); $('#queryform').show(); void(0);";
-        $formInputs = $html->link($jsLink, '[query]', array('id' => 'querylink')) . ' '
+        $formInputs = $html->link($jsLink, '<strong>></strong> query', array('id' => 'querylink', 'class' => 'navlink')) . ' '
                     . '<div id="queryform" style="display: none;">' . $formInputs . '</div>';
     } else {
         $formInputs = $html->div($formInputs);
@@ -2528,20 +2655,25 @@ mo.submitQuery = function() {
     foreach ($mo->mongo['listRows'] as $row) {
         $showEdit = true;
         $id = $idString = $row['_id'];
-        if (is_object($idString)) {
+        if ($id instanceof \MongoDB\BSON\ObjectId) {
+            $idString = '(MongoDB\BSON\ObjectId) ' . $id;
+            $idForUrl = (string) $id;
+            $idType   = 'mongoid';
+        } else if (is_object($idString)) {
             $idString = '(' . get_class($idString) . ') ' . $idString;
-            $idForUrl = serialize($id);
+            $idForUrl = rawurlencode(serialize($id));
+            $idType   = 'object';
         } else if (is_array($idString)) {
             $idString = '(array) ' . json_encode($idString);
-            $idForUrl = serialize($id);
+            $idForUrl = rawurlencode(serialize($id));
+            $idType   = 'array';
         } else {
             $idForUrl = urlencode($id);
+            $idType   = gettype($row['_id']);
         }
-        $idType = gettype($row['_id']);
-        if ($isChunksTable && isset($row['data']) && is_object($row['data'])
-            && get_class($row['data']) == 'MongoBinData') {
+        if ($isChunksTable && isset($row['data']) && $row['data'] instanceof \MongoDB\BSON\Binary) {
             $showEdit = false;
-            $row['data'] = $html->link($chunkUrl . $row['files_id'], 'MongoBinData Object',
+            $row['data'] = $html->link($chunkUrl . $row['files_id'], 'MongoDB\BSON\Binary Object',
                                        array('class' => 'MoAdmin_Reference'));
         }
         $data = explode("\n", substr(print_r($row, true), 8, -2));
@@ -2562,7 +2694,7 @@ mo.submitQuery = function() {
                 $data[($id - 1)] .= ' (';
                 unset($data[$id]);
             } else {
-                if (strpos($data[$id], 'MongoBinData Object') !== false) {
+                if (strpos($data[$id], 'MongoDB\BSON\Binary Object') !== false) {
                     $showEdit = false;
                     $binData = -2;
                 }
@@ -2577,7 +2709,7 @@ mo.submitQuery = function() {
             }
         }
         echo  $html->li('<div style="margin-top: 5px; padding-left: 5px;" class="'
-           . ($html->alternator() ? 'ui-widget-header' : 'ui-widget-content') . '" id="' . $row['_id'] . '">'
+           . ($html->alternator() ? 'ui-widget-header' : 'ui-widget-content') . '" id="' . $idString . '">'
            . '[' . $html->link("javascript: mo.removeObject('" . $idForUrl . "', '" . $idType
            . "'); void(0);", 'X', array('title' => 'Delete')) . '] '
            . ($showEdit ? '[' . $html->link($baseUrl . '?db=' . $dbUrl . '&collection=' . urlencode($collection)
@@ -2604,14 +2736,24 @@ mo.submitQuery = function() {
     $textarea = array('name' => 'object', 'label' => '');
     $textarea['value'] = ($mo->mongo['editObject'] !== '' ? var_export($mo->mongo['editObject'], true)
                                                           : 'array (' . PHP_EOL . PHP_EOL . ')');
-    //MongoID as _id
-    $textarea['value'] = preg_replace('/\'_id\' => \s*MongoId::__set_state\(array\(\s*\)\)/', '\'_id\' => new MongoId("'
-                                      . (isset($_GET['_id']) ? $_GET['_id'] : '') . '")', $textarea['value']);
-    //MongoID in all other occurrences, original ID is not maintained
-    $textarea['value'] = preg_replace('/MongoId::__set_state\(array\(\s*\)\)/', 'new MongoId()', $textarea['value']);
-    //MongoDate
-    $textarea['value'] = preg_replace('/MongoDate::__set_state\(array\(\s*\'sec\' => (\d+),\s*\'usec\' => \d+,\s*\)\)/m',
-                                      'new MongoDate($1)', $textarea['value']);
+    //ObjectId as _id
+    $textarea['value'] = preg_replace(
+        '/\'_id\' =>\s*\\\\?MongoDB\\\\BSON\\\\ObjectId::__set_state\(array\(\s*\'oid\' => \'([^\']+)\'[^)]*\)\)/',
+        "'_id' => new MongoDB\\BSON\\ObjectId('$1')",
+        $textarea['value']
+    );
+    //ObjectId in all other occurrences
+    $textarea['value'] = preg_replace(
+        '/\\\\?MongoDB\\\\BSON\\\\ObjectId::__set_state\(array\(\s*\'oid\' => \'([^\']+)\'[^)]*\)\)/',
+        "new MongoDB\\BSON\\ObjectId('$1')",
+        $textarea['value']
+    );
+    //UTCDateTime (replaces MongoDate)
+    $textarea['value'] = preg_replace(
+        '/\\\\?MongoDB\\\\BSON\\\\UTCDateTime::__set_state\(array\(\s*\'milliseconds\' => (\d+)[^)]*\)\)/m',
+        'new MongoDB\\BSON\\UTCDateTime($1)',
+        $textarea['value']
+    );
     echo $html->div($form->textarea($textarea)
        . $form->hidden(array('name' => 'action', 'value' => 'editObject')));
     echo $html->div($form->hidden(array('name' => 'db', 'value' => get::htmlentities($db)))
@@ -2624,5 +2766,4 @@ mo.submitQuery = function() {
     echo $html->drillDownList($mo->mongo['getStats']);
 }
 echo '</div>'; //end of bodycontent
-
 echo $html->footer();
